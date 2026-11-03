@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VIVO Super Brand Day · Jakarta</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-0: #f4f3f0;
+    --surface-1: #fcfcfb;
+    --border: #e3e2dd;
+    --grid: #ecebe7;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #85847f;
+    --series-1: #2a78d6;      /* actual */
+    --series-1-soft: #cde2fb;
+    --target: #85847f;        /* target / pace reference (neutral) */
+    --good: #0ca30c;
+    --warning: #fab219;
+    --critical: #d03b3b;
+    --good-text: #006300;
+    --warning-text: #8a5a00;
+    --critical-text: #b02a2a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --surface-0: #121211;
+      --surface-1: #1a1a19;
+      --border: #2e2e2b;
+      --grid: #262624;
+      --text-primary: #f0efec;
+      --text-secondary: #c3c2b7;
+      --text-muted: #8f8e88;
+      --series-1: #3987e5;
+      --series-1-soft: #1c3a5e;
+      --target: #8f8e88;
+      --good-text: #4cc94c;
+      --warning-text: #fab219;
+      --critical-text: #f07a7a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--surface-0); color: var(--text-primary);
+         font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 20px 20px 48px; }
+  header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+  .sub { color: var(--text-secondary); margin-top: 2px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .chip { font-size: 12px; color: var(--text-secondary); background: var(--surface-1); border: 1px solid var(--border);
+          border-radius: 999px; padding: 3px 10px; white-space: nowrap; }
+  .btn { font: inherit; font-size: 13px; color: #fff; background: var(--series-1); border: 0; border-radius: 8px;
+         padding: 6px 12px; cursor: pointer; text-decoration: none; white-space: nowrap; }
+  .btn[aria-disabled="true"] { background: var(--text-muted); cursor: default; }
+
+  .filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background: var(--surface-1);
+             border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; margin-bottom: 16px; }
+  .filters label { font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+  select, input[type=search] { font: inherit; font-size: 13px; color: var(--text-primary); background: var(--surface-0);
+         border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; }
+  input[type=search] { min-width: 200px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button { font: inherit; font-size: 13px; background: var(--surface-0); color: var(--text-secondary); border: 0;
+                padding: 5px 12px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--series-1); color: #fff; }
+  .spacer { flex: 1; }
+
+  .kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+  .kpi .label { font-size: 12px; color: var(--text-secondary); }
+  .kpi .value { font-size: 28px; font-weight: 650; letter-spacing: -0.02em; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .kpi .value small { font-size: 14px; font-weight: 500; color: var(--text-secondary); }
+  .kpi .foot { font-size: 12px; color: var(--text-secondary); margin-top: 6px; }
+  .bar { position: relative; height: 8px; background: var(--grid); border-radius: 4px; margin-top: 10px; }
+  .bar > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--series-1); border-radius: 4px; }
+  .bar > b { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--text-primary); }
+  .status { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; }
+  .status .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .s-good { color: var(--good-text); } .s-good .dot { background: var(--good); }
+  .s-warn { color: var(--warning-text); } .s-warn .dot { background: var(--warning); }
+  .s-crit { color: var(--critical-text); } .s-crit .dot { background: var(--critical); }
+  .s-none { color: var(--text-muted); } .s-none .dot { background: var(--text-muted); }
+
+  .grid2 { display: grid; grid-template-columns: 3fr 2fr; gap: 12px; margin-bottom: 16px; }
+  h2 { font-size: 15px; margin: 0 0 2px; }
+  .note { font-size: 12px; color: var(--text-secondary); margin: 0 0 10px; }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .sw { width: 14px; height: 0; border-top: 2px solid; display: inline-block; }
+  svg { display: block; width: 100%; height: auto; overflow: visible; }
+  svg text { fill: var(--text-secondary); font-size: 11px; }
+  .chart-box { position: relative; }
+  .tip { position: absolute; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border);
+         border-radius: 8px; padding: 6px 9px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.12);
+         white-space: nowrap; display: none; z-index: 5; }
+  .tip b { font-variant-numeric: tabular-nums; }
+
+  .table-card { padding: 0; overflow: hidden; margin-bottom: 16px; }
+  .table-head { padding: 14px 16px 6px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: flex-end; }
+  .tscroll { overflow: auto; max-height: 640px; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  table { font-size: 13px; }
+  th, td { padding: 6px 7px; border-bottom: 1px solid var(--grid); text-align: right; white-space: nowrap; }
+  td.store { max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
+  td.tsh { max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+  th { position: sticky; top: 0; background: var(--surface-1); font-size: 12px; font-weight: 600; color: var(--text-secondary);
+       cursor: pointer; user-select: none; z-index: 2; border-bottom: 1px solid var(--border); }
+  th.l, td.l { text-align: left; }
+  th[aria-sort="ascending"]::after { content: " ▲"; font-size: 9px; }
+  th[aria-sort="descending"]::after { content: " ▼"; font-size: 9px; }
+  th .grp { display: block; font-weight: 500; color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+  tbody tr:hover { background: var(--surface-0); }
+  td .site { color: var(--text-muted); font-size: 12px; margin-right: 6px; }
+  td.muted { color: var(--text-muted); }
+  .mini { display: inline-block; vertical-align: middle; width: 48px; height: 6px; background: var(--grid); border-radius: 3px; position: relative; margin-right: 8px; }
+  .mini > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--series-1); border-radius: 3px; }
+  .mini > b { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text-primary); }
+  .flag { font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 4px; border: 1px solid currentColor; }
+  tfoot td { font-weight: 650; background: var(--surface-1); position: sticky; bottom: 0; border-top: 1px solid var(--border); }
+
+  footer { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
+  footer p { margin: 4px 0; }
+  @media (max-width: 1000px) {
+    .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid2 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>VIVO Super Brand Day · Jakarta</h1>
+      <div class="sub" id="sub">Loading…</div>
+    </div>
+    <div class="meta" id="meta"></div>
+  </header>
+
+  <div class="filters" role="group" aria-label="Filters">
+    <label>TSH <select id="fTsh"><option value="">All TSH</option></select></label>
+    <span class="seg" role="group" aria-label="Segment">
+      <button type="button" data-seg="dev" aria-pressed="true">All Device</button>
+      <button type="button" data-seg="al" aria-pressed="false">Above Low</button>
+    </span>
+    <label><input type="checkbox" id="fTargetOnly" checked> Only stores with a target</label>
+    <span class="spacer"></span>
+    <input type="search" id="fSearch" placeholder="Search store or site code…" aria-label="Search store">
+  </div>
+
+  <section class="kpis" id="kpis"></section>
+
+  <section class="grid2">
+    <div class="card">
+      <h2>Cumulative sales vs target pace</h2>
+      <p class="note" id="paceNote"></p>
+      <div class="legend">
+        <span><i class="sw" style="border-color:var(--series-1)"></i>Actual (cumulative)</span>
+        <span><i class="sw" style="border-color:var(--target);border-top-style:dashed"></i>Target pace</span>
+      </div>
+      <div class="chart-box" id="paceBox"><svg id="paceChart" viewBox="0 0 640 260" role="img" aria-label="Cumulative sales vs target pace"></svg><div class="tip"></div></div>
+    </div>
+    <div class="card">
+      <h2>Achievement by TSH</h2>
+      <p class="note">Bar = actual MTD (incl. today) · black tick = target pace today</p>
+      <div class="chart-box" id="tshBox"><svg id="tshChart" viewBox="0 0 420 260" role="img" aria-label="Achievement by TSH"></svg><div class="tip"></div></div>
+    </div>
+  </section>
+
+  <section class="card table-card">
+    <div class="table-head">
+      <div>
+        <h2>Store achievement</h2>
+        <p class="note" style="margin:0">Click a column to sort. "Need / day" = remaining target ÷ remaining days (incl. today). Stock flag compares store stock with the remaining gap.</p>
+      </div>
+    </div>
+    <div class="tscroll">
+      <table id="storeTable">
+        <thead></thead><tbody></tbody><tfoot></tfoot>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Model mix · MTD sales vs stock</h2>
+    <p class="note">Units, for the stores in the current filter. DC stock = Roxy, Cempaka Mas, Srengseng DCs.</p>
+    <div class="chart-box" id="modelBox"><svg id="modelChart" viewBox="0 0 1000 300" role="img" aria-label="Model mix"></svg><div class="tip"></div></div>
+  </section>
+
+  <footer>
+    <p>Source: BigQuery e-smart-433113 · sales: region_data.sales_all_retail (to <span class="f-asof"></span>) + region_data.sales_daily (today, PAID POS) · stock: region_data.sales_vs_stock (<span class="f-stock"></span>) · targets: master_data.target_sbd_vivo_jakarta.</p>
+    <p>Target Device = all VIVO Device qty sold per store, 1–30 Nov. Target Above Low = VIVO Device qty with price_category_GFK not LOW (MID + HIGH + FLAGSHIP). Today's POS orders get the same GFK bands from nett unit price incl. tax (≤3 jt Low, ≤5 jt Mid, ≤9 jt High, above Flagship). Stock has no selling price, so stock is split by sales_vs_stock price_segment. Pace uses calendar days.</p>
+  </footer>
+</div>
+
+<script>
+// ===== Config: set your repo after deploying so the "Refresh data" button links to the workflow =====
+const GITHUB_REPO = "";   // e.g. "andi-r5/sbd-vivo-dashboard"
+
+const AL_SEGS = new Set(["02", "03", "04"]);
+const SEG_NAMES = { "01": "Low", "02": "Mid", "03": "High", "04": "Flagship", "00": "Unmapped" };
+const nf = new Intl.NumberFormat("id-ID");
+const fmt = (n) => nf.format(Math.round(n));
+const pct = (n) => (n == null || !isFinite(n)) ? "—" : Math.round(n * 100) + "%";
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const parseDate = (s) => new Date(s + "T00:00:00");
+const dayMs = 86400000;
+
+let D, STORES, state = { tsh: "", seg: "dev", targetOnly: true, q: "", sortKey: "gapPace", sortDir: "asc" };
+
+fetch("data/sbd.json", { cache: "no-store" })
+  .then((r) => r.json())
+  .then((json) => { D = prep(json); initFilters(); render(); })
+  .catch((e) => { document.getElementById("sub").textContent = "Could not load data/sbd.json - " + e; });
+
+function prep(j) {
+  const start = parseDate(j.period_start), end = parseDate(j.period_end), asof = parseDate(j.sales_asof);
+  const totalDays = Math.round((end - start) / dayMs) + 1;
+  const doneDays = Math.max(0, Math.min(totalDays, Math.round((asof - start) / dayMs) + 1));
+  const remDays = Math.max(1, totalDays - doneDays);     // includes today
+  const split = (a) => a.map((r) => r.split("|"));
+
+  const stores = new Map();
+  split(j.targets).forEach(([site, name, tsh, lob, td, tal]) => {
+    stores.set(site, { site, name, tsh: tsh || "(DC)", isDC: site.startsWith("BG"), tDev: +td, tAl: +tal,
+      mtd: { dev: 0, al: 0, val: 0 }, done: { dev: 0, al: 0 }, today: { dev: 0, al: 0 },
+      oct: { dev: 0, al: 0 }, ly: { dev: 0, al: 0 }, stock: { dev: 0, al: 0 }, dc: { dev: 0, al: 0 } });
+  });
+  const daily = [];   // [dayIndex, site, seg, model, qty]
+  split(j.sales).forEach(([d, site, seg, model, q, a]) => {
+    const s = stores.get(site); if (!s) return;
+    const di = Math.round((parseDate(d.slice(0,4)+"-"+d.slice(4,6)+"-"+d.slice(6)) - start) / dayMs);
+    q = +q; s.mtd.dev += q; s.done.dev += q; s.mtd.val += +a;
+    if (AL_SEGS.has(seg)) { s.mtd.al += q; s.done.al += q; }
+    daily.push({ di, site, seg, model, q });
+  });
+  const todayRows = [];
+  split(j.today).forEach(([d, site, seg, model, q, a]) => {
+    const s = stores.get(site); if (!s) return;
+    q = +q; s.mtd.dev += q; s.today.dev += q; s.mtd.val += +a;
+    if (AL_SEGS.has(seg)) { s.mtd.al += q; s.today.al += q; }
+    todayRows.push({ site, seg, model, q });
+  });
+  const addBase = (arr, key) => split(arr).forEach(([site, seg, q]) => {
+    const s = stores.get(site); if (!s) return;
+    s[key].dev += +q; if (AL_SEGS.has(seg)) s[key].al += +q;
+  });
+  addBase(j.prev_month, "oct"); addBase(j.prev_year, "ly");
+  const stockRows = [];
+  split(j.stock).forEach(([line, site, seg, model, q]) => {
+    const s = stores.get(site); if (!s) return;
+    q = +q; const k = line === "stock_dc" ? "dc" : "stock";
+    s[k].dev += q; if (AL_SEGS.has(seg)) s[k].al += q;
+    stockRows.push({ line, site, seg, model, q });
+  });
+  STORES = [...stores.values()];
+  return { j, start, end, totalDays, doneDays, remDays, daily, todayRows, stockRows };
+}
+
+function initFilters() {
+  const tshs = [...new Set(STORES.filter((s) => !s.isDC).map((s) => s.tsh))].sort();
+  const sel = document.getElementById("fTsh");
+  tshs.forEach((t) => sel.insertAdjacentHTML("beforeend", `<option>${esc(t)}</option>`));
+  sel.onchange = () => { state.tsh = sel.value; render(); };
+  document.querySelectorAll(".seg button").forEach((b) => b.onclick = () => {
+    state.seg = b.dataset.seg;
+    document.querySelectorAll(".seg button").forEach((x) => x.setAttribute("aria-pressed", x === b));
+    render();
+  });
+  document.getElementById("fTargetOnly").onchange = (e) => { state.targetOnly = e.target.checked; render(); };
+  document.getElementById("fSearch").oninput = (e) => { state.q = e.target.value.trim().toLowerCase(); render(); };
+
+  const j = D.j, m = document.getElementById("meta");
+  const longDate = (s) => parseDate(s).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  document.getElementById("sub").textContent =
+    `Period ${longDate(j.period_start)} – ${longDate(j.period_end)} · day ${D.doneDays} of ${D.totalDays} complete · ${D.remDays} days left incl. today`;
+  m.innerHTML = `
+    <span class="chip">Sales to ${longDate(j.sales_asof)}${j.today_date ? ` + today until ${j.today_last_time.slice(0,5)}` : ""}</span>
+    <span class="chip">Stock ${longDate(j.stock_date)}</span>
+    <span class="chip">Imported ${j.refreshed_at.slice(0,16)} WIB</span>
+    ${GITHUB_REPO
+      ? `<a class="btn" target="_blank" rel="noopener" href="https://github.com/${GITHUB_REPO}/actions/workflows/refresh.yml">Refresh data ↗</a>`
+      : `<span class="btn" aria-disabled="true" title="Set GITHUB_REPO in index.html after deploying">Refresh data</span>`}`;
+  document.querySelectorAll(".f-asof").forEach((e) => e.textContent = longDate(j.sales_asof));
+  document.querySelectorAll(".f-stock").forEach((e) => e.textContent = longDate(j.stock_date));
+
+  document.querySelectorAll("#storeTable thead").forEach((th) => th.onclick = (e) => {
+    const c = e.target.closest("th"); if (!c || !c.dataset.k) return;
+    if (state.sortKey === c.dataset.k) state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+    else { state.sortKey = c.dataset.k; state.sortDir = c.dataset.k === "name" || c.dataset.k === "tsh" ? "asc" : "desc"; }
+    renderTable(filtered());
+  });
+}
+
+function filtered() {
+  return STORES.filter((s) => !s.isDC
+    && (!state.tsh || s.tsh === state.tsh)
+    && (!state.targetOnly || s.tDev > 0)
+    && (!state.q || s.name.toLowerCase().includes(state.q) || s.site.toLowerCase().includes(state.q)));
+}
+
+// per-store metrics for the active segment
+function metrics(s) {
+  const k = state.seg, target = k === "dev" ? s.tDev : s.tAl;
+  const actual = s.mtd[k], done = s.done[k];
+  const expected = target * D.doneDays / D.totalDays;
+  const achv = target ? actual / target : null;
+  const pace = expected ? done / expected : null;   // completed days vs expected
+  const gap = Math.max(0, target - actual);
+  return { target, actual, done, today: s.today[k], expected, achv, pace, gap, need: gap / D.remDays,
+           oct: s.oct[k], ly: s.ly[k], stock: s.stock[k], gapPace: target ? (actual - target * (D.doneDays + 1) / D.totalDays) : 1e9 };
+}
+
+function statusOf(pace, hasTarget) {
+  if (!hasTarget) return ["s-none", "No target"];
+  if (pace >= 1) return ["s-good", "On pace"];
+  if (pace >= 0.8) return ["s-warn", "Slightly behind"];
+  return ["s-crit", "Behind"];
+}
+const statusHtml = ([cls, label]) => `<span class="status ${cls}"><i class="dot"></i>${label}</span>`;
+
+function render() {
+  const rows = filtered();
+  renderKpis(rows); renderPace(rows); renderTsh(); renderTable(rows); renderModels(rows);
+}
+
+function renderKpis(rows) {
+  const sum = (f) => rows.reduce((a, s) => a + f(s), 0);
+  const seg = state.seg, segLabel = seg === "dev" ? "Device" : "Above Low";
+  const tgtStores = rows.filter((s) => (seg === "dev" ? s.tDev : s.tAl) > 0);
+  const kd = (k) => ({ t: sum((s) => k === "dev" ? s.tDev : s.tAl), a: sum((s) => s.mtd[k]), d: sum((s) => s.done[k]) });
+  const dev = kd("dev"), al = kd("al");
+  const expFrac = D.doneDays / D.totalDays;
+  const card = (label, x) => {
+    const achv = x.t ? x.a / x.t : null, pace = x.t ? x.d / (x.t * expFrac) : null;
+    return `<div class="card kpi"><div class="label">${label} achievement</div>
+      <div class="value">${pct(achv)} <small>${fmt(x.a)} / ${fmt(x.t)}</small></div>
+      <div class="bar" title="Tick = expected by end of day ${D.doneDays}"><i style="width:${Math.min(100, (achv || 0) * 100)}%"></i><b style="left:${expFrac * 100}%"></b></div>
+      <div class="foot">${statusHtml(statusOf(pace, x.t > 0))} · expected ${pct(expFrac)} by now</div></div>`;
+  };
+  const a = kd(seg);
+  const runRate = D.doneDays ? a.d / D.doneDays : 0;
+  const need = Math.max(0, a.t - a.a) / D.remDays;
+  const today = sum((s) => s.today[seg]);
+  const stock = sum((s) => s.stock[seg]);
+  const dc = STORES.filter((s) => s.isDC).reduce((x, s) => x + s.dc[seg], 0);
+  const gap = Math.max(0, a.t - a.a);
+  const short = tgtStores.filter((s) => { const m = metrics(s); return m.gap > m.stock; }).length;
+  document.getElementById("kpis").innerHTML = card("Device", dev) + card("Above Low", al) +
+    `<div class="card kpi"><div class="label">Run-rate · ${segLabel} / day</div>
+      <div class="value">${runRate.toFixed(1)} <small>now</small></div>
+      <div class="foot">Need <b>${need.toFixed(1)}</b>/day for the rest of the period (${(runRate ? need / runRate : 0).toFixed(1)}× current)</div></div>
+     <div class="card kpi"><div class="label">Today so far · ${segLabel}</div>
+      <div class="value">${fmt(today)} <small>units</small></div>
+      <div class="foot">${D.j.today_date ? "POS until " + D.j.today_last_time.slice(0,5) + " WIB" : "No intraday data yet"} · day target ≈ ${(a.t / D.totalDays).toFixed(1)}</div></div>
+     <div class="card kpi"><div class="label">Stock · ${segLabel} units</div>
+      <div class="value">${fmt(stock)} <small>store</small></div>
+      <div class="foot">+ ${fmt(dc)} at DC · remaining gap ${fmt(gap)} · <b>${short}</b> store${short === 1 ? "" : "s"} with stock below gap</div></div>`;
+  document.getElementById("paceNote").textContent =
+    `${segLabel} units · ${rows.length} stores in filter · completed days only, today shown as a separate point`;
+}
+
+// ---------- tooltip helper ----------
+function tipAt(box, html, x, y) {
+  const t = box.querySelector(".tip"); t.innerHTML = html; t.style.display = "block";
+  const bw = box.clientWidth, tw = t.offsetWidth;
+  t.style.left = Math.min(bw - tw - 4, Math.max(4, x + 12)) + "px"; t.style.top = (y - 10) + "px";
+}
+const hideTip = (box) => box.querySelector(".tip").style.display = "none";
+function svgPoint(svg, evt) {
+  const r = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal;
+  return { x: (evt.clientX - r.left) * vb.width / r.width, y: (evt.clientY - r.top) * vb.height / r.height, px: evt.clientX - r.left, py: evt.clientY - r.top };
+}
+
+function renderPace(rows) {
+  const svg = document.getElementById("paceChart"), box = document.getElementById("paceBox");
+  const W = 640, H = 260, m = { l: 44, r: 16, t: 10, b: 28 }, iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const ids = new Set(rows.map((s) => s.site)), seg = state.seg;
+  const target = rows.reduce((a, s) => a + (seg === "dev" ? s.tDev : s.tAl), 0);
+  const perDay = new Array(D.totalDays).fill(0);
+  D.daily.forEach((r) => { if (ids.has(r.site) && (seg === "dev" || AL_SEGS.has(r.seg))) perDay[r.di] += r.q; });
+  const todayQ = D.todayRows.reduce((a, r) => a + (ids.has(r.site) && (seg === "dev" || AL_SEGS.has(r.seg)) ? r.q : 0), 0);
+  const cum = []; let c = 0;
+  for (let i = 0; i < D.doneDays; i++) { c += perDay[i]; cum.push(c); }
+  const yMax = Math.max(target, c + todayQ, 1) * 1.05;
+  const x = (i) => m.l + (i + 0.5) * iw / D.totalDays, y = (v) => m.t + ih - v / yMax * ih;
+  const ticks = niceTicks(yMax, 5);
+  let g = ticks.map((t) => `<line x1="${m.l}" x2="${W - m.r}" y1="${y(t)}" y2="${y(t)}" stroke="var(--grid)"/>
+     <text x="${m.l - 6}" y="${y(t) + 4}" text-anchor="end">${fmt(t)}</text>`).join("");
+  for (let i = 0; i < D.totalDays; i += (i === 0 ? 4 : 5)) g += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${i + 1}</text>`;
+  if ((D.totalDays - 1) % 5 !== 4) g += `<text x="${x(D.totalDays - 1)}" y="${H - 8}" text-anchor="middle">${D.totalDays}</text>`;
+  // target pace (dashed neutral)
+  g += `<line x1="${x(-0.5)}" y1="${y(0)}" x2="${x(D.totalDays - 0.5)}" y2="${y(target)}" stroke="var(--target)" stroke-width="2" stroke-dasharray="5 4"/>`;
+  g += `<text x="${x(D.totalDays - 0.5) - 4}" y="${y(target) - 6}" text-anchor="end">Target ${fmt(target)}</text>`;
+  // daily bars (light, behind)
+  const bw = Math.max(2, iw / D.totalDays - 4);
+  perDay.slice(0, D.doneDays).forEach((v, i) => { if (v) g += `<rect x="${x(i) - bw / 2}" y="${y(v)}" width="${bw}" height="${y(0) - y(v)}" rx="2" fill="var(--series-1-soft)"/>`; });
+  // cumulative line
+  const pts = [[x(-0.5), y(0)], ...cum.map((v, i) => [x(i), y(v)])];
+  g += `<polyline points="${pts.map((p) => p.join(",")).join(" ")}" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round"/>`;
+  cum.forEach((v, i) => g += `<circle cx="${x(i)}" cy="${y(v)}" r="4" fill="var(--series-1)" stroke="var(--surface-1)" stroke-width="2"/>`);
+  if (todayQ || D.j.today_date) {
+    const ti = D.doneDays;
+    g += `<line x1="${x(ti - 1)}" y1="${y(c)}" x2="${x(ti)}" y2="${y(c + todayQ)}" stroke="var(--series-1)" stroke-width="2" stroke-dasharray="2 3"/>
+          <circle cx="${x(ti)}" cy="${y(c + todayQ)}" r="4" fill="var(--surface-1)" stroke="var(--series-1)" stroke-width="2"/>
+          <text x="${x(ti) + 8}" y="${y(c + todayQ) - 6}">${fmt(c + todayQ)} incl. today</text>`;
+  }
+  g += `<line id="pcross" x1="0" x2="0" y1="${m.t}" y2="${m.t + ih}" stroke="var(--text-muted)" stroke-width="1" visibility="hidden"/>`;
+  g += `<rect x="${m.l}" y="${m.t}" width="${iw}" height="${ih}" fill="transparent" id="phit"/>`;
+  svg.innerHTML = g;
+  const cross = svg.querySelector("#pcross");
+  svg.querySelector("#phit").onmousemove = (e) => {
+    const p = svgPoint(svg, e); const i = Math.max(0, Math.min(D.totalDays - 1, Math.floor((p.x - m.l) / iw * D.totalDays)));
+    cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("visibility", "visible");
+    const exp = target * (i + 1) / D.totalDays;
+    const act = i < D.doneDays ? cum[i] : (i === D.doneDays && D.j.today_date ? c + todayQ : null);
+    const dayLbl = new Date(D.start.getTime() + i * dayMs).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+    tipAt(box, `<div>${dayLbl}${i === D.doneDays ? " (today, partial)" : ""}</div>
+      ${act != null ? `<div>Actual cum. <b>${fmt(act)}</b>${i < D.doneDays ? ` · day ${fmt(perDay[i])}` : ""}</div>` : ""}
+      <div>Target pace <b>${fmt(exp)}</b></div>${act != null ? `<div>Gap <b>${fmt(act - exp)}</b></div>` : ""}`, p.px, p.py);
+  };
+  svg.querySelector("#phit").onmouseleave = () => { cross.setAttribute("visibility", "hidden"); hideTip(box); };
+}
+
+function renderTsh() {
+  const svg = document.getElementById("tshChart"), box = document.getElementById("tshBox");
+  const seg = state.seg;
+  const base = STORES.filter((s) => !s.isDC && (!state.targetOnly || s.tDev > 0));
+  const by = new Map();
+  base.forEach((s) => {
+    const o = by.get(s.tsh) || { tsh: s.tsh, t: 0, a: 0, n: 0 };
+    o.t += seg === "dev" ? s.tDev : s.tAl; o.a += s.mtd[seg]; o.n++; by.set(s.tsh, o);
+  });
+  const list = [...by.values()].filter((o) => o.t > 0).sort((a, b) => b.a / b.t - a.a / a.t);
+  const W = 420, rowH = 40, m = { l: 132, r: 56, t: 6 }, H = m.t + list.length * rowH + 22, iw = W - m.l - m.r;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const maxV = Math.max(0.25, ...list.map((o) => o.a / o.t)) * 1.1;
+  const x = (v) => m.l + v / maxV * iw, expFrac = D.doneDays / D.totalDays;
+  let g = "";
+  [0, 0.25, 0.5, 0.75, 1].filter((v) => v <= maxV).forEach((v) => g += `<line x1="${x(v)}" x2="${x(v)}" y1="${m.t}" y2="${H - 20}" stroke="var(--grid)"/><text x="${x(v)}" y="${H - 6}" text-anchor="middle">${v * 100}%</text>`);
+  list.forEach((o, i) => {
+    const yy = m.t + i * rowH + 8, ach = o.a / o.t, sel = !state.tsh || state.tsh === o.tsh;
+    const name = o.tsh.split(" ").slice(0, 2).join(" ");
+    g += `<text x="${m.l - 8}" y="${yy + 9}" text-anchor="end" style="fill:var(--text-primary)">${esc(name)}</text>
+      <text x="${m.l - 8}" y="${yy + 23}" text-anchor="end">${o.n} store${o.n === 1 ? "" : "s"}</text>
+      <rect x="${m.l}" y="${yy}" width="${Math.max(2, x(ach) - m.l)}" height="14" rx="4" fill="var(--series-1)" opacity="${sel ? 1 : 0.35}"/>
+      <line x1="${x(expFrac)}" x2="${x(expFrac)}" y1="${yy - 3}" y2="${yy + 17}" stroke="var(--text-primary)" stroke-width="2"/>
+      <text x="${Math.max(x(ach), x(expFrac)) + 6}" y="${yy + 11}" style="fill:var(--text-primary)">${pct(ach)}</text>
+      <rect x="0" y="${yy - 8}" width="${W}" height="${rowH}" fill="transparent" data-i="${i}" class="hit"/>`;
+  });
+  svg.innerHTML = g;
+  svg.querySelectorAll(".hit").forEach((r) => {
+    const o = list[+r.dataset.i];
+    r.onmousemove = (e) => { const p = svgPoint(svg, e); tipAt(box, `<div><b>${esc(o.tsh)}</b></div><div>Actual <b>${fmt(o.a)}</b> / target <b>${fmt(o.t)}</b> (${pct(o.a / o.t)})</div><div>Expected by now ${pct(expFrac)} · gap ${fmt(Math.max(0, o.t - o.a))}</div><div style="color:var(--text-muted)">Click to filter</div>`, p.px, p.py); };
+    r.onmouseleave = () => hideTip(box);
+    r.style.cursor = "pointer";
+    r.onclick = () => { state.tsh = state.tsh === o.tsh ? "" : o.tsh; document.getElementById("fTsh").value = state.tsh; render(); };
+  });
+}
+
+function renderTable(rows) {
+  const t = document.getElementById("storeTable"), segLabel = state.seg === "dev" ? "Device" : "Above Low";
+  const cols = [
+    ["name", "Store", "l"], ["tsh", "TSH", "l"], ["target", "Target"], ["actual", "MTD"], ["today", "Today"],
+    ["achv", "Achv"], ["gapPace", "Status"], ["gap", "Gap"], ["need", "Need / day"],
+    ["oct", "Oct-26"], ["ly", "Nov-25"], ["stock", "Stock"], ["cover", "Stock vs gap"]];
+  t.tHead.innerHTML = `<tr>${cols.map(([k, l, c], i) => `<th data-k="${k}" class="${c || ""}" ${state.sortKey === k ? `aria-sort="${state.sortDir === "asc" ? "ascending" : "descending"}"` : ""}>${i === 2 ? `<span class="grp">${segLabel}</span>` : i === 9 ? `<span class="grp">Reference (full month)</span>` : i === 11 ? `<span class="grp">Store stock ${D.j.stock_date.slice(8)}/${D.j.stock_date.slice(5,7)}</span>` : `<span class="grp">&nbsp;</span>`}${l}</th>`).join("")}</tr>`;
+  const data = rows.map((s) => ({ s, m: metrics(s) }));
+  const key = state.sortKey, dir = state.sortDir === "asc" ? 1 : -1;
+  const val = (o) => key === "name" ? o.s.name : key === "tsh" ? o.s.tsh : key === "cover" ? (o.m.gap ? o.m.stock / o.m.gap : 1e9) : (o.m[key] ?? -1);
+  data.sort((a, b) => { const va = val(a), vb = val(b); return (typeof va === "string" ? va.localeCompare(vb) : va - vb) * dir; });
+  const expFrac = D.doneDays / D.totalDays;
+  t.tBodies[0].innerHTML = data.map(({ s, m }) => {
+    const has = m.target > 0, st = statusOf(m.pace, has);
+    const cover = !has ? `<span class="muted">—</span>` : m.gap === 0 ? `<span class="status s-good"><i class="dot"></i>Target hit</span>`
+      : m.stock >= m.gap ? `<span class="status s-good"><i class="dot"></i>Covered</span>`
+      : m.stock >= m.gap * 0.5 ? `<span class="status s-warn"><i class="dot"></i>Short ${fmt(m.gap - m.stock)}</span>`
+      : `<span class="status s-crit"><i class="dot"></i>Short ${fmt(m.gap - m.stock)}</span>`;
+    return `<tr>
+      <td class="l store" title="${esc(s.name)}"><span class="site">${s.site}</span>${esc(s.name.replace(/^ERAFONE\s+/, ""))}</td>
+      <td class="l tsh" title="${esc(s.tsh)}">${esc(s.tsh.split(" ").slice(0, 2).join(" "))}</td>
+      <td>${has ? fmt(m.target) : `<span class="muted">0</span>`}</td>
+      <td>${fmt(m.actual)}</td>
+      <td class="${m.today ? "" : "muted"}">${fmt(m.today)}</td>
+      <td>${has ? `<span class="mini"><i style="width:${Math.min(100, m.achv * 100)}%"></i><b style="left:${expFrac * 100}%"></b></span>${pct(m.achv)}` : `<span class="muted">—</span>`}</td>
+      <td>${statusHtml(st)}</td>
+      <td>${has ? fmt(m.gap) : "—"}</td>
+      <td>${has ? m.need.toFixed(1) : "—"}</td>
+      <td>${fmt(m.oct)}</td>
+      <td>${fmt(m.ly)}</td>
+      <td>${fmt(m.stock)}</td>
+      <td>${cover}</td></tr>`;
+  }).join("") || `<tr><td class="l" colspan="13">No stores match the filter.</td></tr>`;
+  const tot = data.reduce((a, { m }) => { ["target", "actual", "today", "gap", "oct", "ly", "stock"].forEach((k) => a[k] += m[k]); a.done += m.done; return a; },
+    { target: 0, actual: 0, today: 0, gap: 0, oct: 0, ly: 0, stock: 0, done: 0 });
+  const tp = tot.target ? tot.done / (tot.target * expFrac) : null;
+  t.tFoot.innerHTML = `<tr><td class="l">Total · ${data.length} stores</td><td></td><td>${fmt(tot.target)}</td><td>${fmt(tot.actual)}</td><td>${fmt(tot.today)}</td>
+    <td>${pct(tot.target ? tot.actual / tot.target : null)}</td><td>${statusHtml(statusOf(tp, tot.target > 0))}</td><td>${fmt(tot.gap)}</td>
+    <td>${(tot.gap / D.remDays).toFixed(1)}</td><td>${fmt(tot.oct)}</td><td>${fmt(tot.ly)}</td><td>${fmt(tot.stock)}</td><td></td></tr>`;
+}
+
+function renderModels(rows) {
+  const svg = document.getElementById("modelChart"), box = document.getElementById("modelBox");
+  const ids = new Set(rows.map((s) => s.site)), seg = state.seg, ok = (sg) => seg === "dev" || AL_SEGS.has(sg);
+  const by = new Map(); const get = (mo) => by.get(mo) || (by.set(mo, { model: mo, sales: 0, stock: 0, dc: 0, segs: new Set() }), by.get(mo));
+  D.daily.forEach((r) => { if (ids.has(r.site) && ok(r.seg)) { const o = get(r.model); o.sales += r.q; o.segs.add(r.seg); } });
+  D.todayRows.forEach((r) => { if (ids.has(r.site) && ok(r.seg)) { const o = get(r.model); o.sales += r.q; o.segs.add(r.seg); } });
+  D.stockRows.forEach((r) => { if (!ok(r.seg)) return;
+    if (r.line === "stock_dc") { const o = get(r.model); o.dc += r.q; o.segs.add(r.seg); }
+    else if (ids.has(r.site)) { const o = get(r.model); o.stock += r.q; o.segs.add(r.seg); } });
+  const list = [...by.values()].sort((a, b) => b.sales - a.sales || b.stock - a.stock).slice(0, 12);
+  const W = 1000, rowH = 24, m = { l: 150, r: 20, t: 26, gap: 40 }, H = m.t + list.length * rowH + 8;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const colW = (W - m.l - m.r - m.gap * 2) / 3;
+  const panels = [["sales", "MTD sales (incl. today)"], ["stock", "Store stock"], ["dc", "DC stock"]];
+  let g = "";
+  panels.forEach(([k, label], pi) => {
+    const x0 = m.l + pi * (colW + m.gap), mx = Math.max(1, ...list.map((o) => o[k]));
+    g += `<text x="${x0}" y="14" style="fill:var(--text-primary);font-weight:600">${label}</text>`;
+    list.forEach((o, i) => {
+      const yy = m.t + i * rowH, w = o[k] / mx * (colW - 40);
+      if (o[k]) g += `<rect x="${x0}" y="${yy + 5}" width="${Math.max(2, w)}" height="12" rx="4" fill="${pi === 0 ? "var(--series-1)" : "var(--target)"}" opacity="${pi === 2 ? 0.6 : 1}"/>`;
+      g += `<text x="${x0 + Math.max(2, w) + 6}" y="${yy + 15}" style="fill:var(--text-primary)">${o[k] ? fmt(o[k]) : "–"}</text>`;
+    });
+  });
+  list.forEach((o, i) => {
+    const yy = m.t + i * rowH, segs = [...o.segs].sort().map((s) => SEG_NAMES[s]).join("/");
+    g += `<text x="${m.l - 10}" y="${yy + 15}" text-anchor="end" style="fill:var(--text-primary)">${esc(o.model)} <tspan style="fill:var(--text-muted)">${segs}</tspan></text>
+      <rect x="0" y="${yy}" width="${W}" height="${rowH}" fill="transparent" class="hit" data-i="${i}"/>`;
+  });
+  svg.innerHTML = g;
+  svg.querySelectorAll(".hit").forEach((r) => {
+    const o = list[+r.dataset.i];
+    r.onmousemove = (e) => { const p = svgPoint(svg, e); tipAt(box, `<b>${esc(o.model)}</b><div>MTD sales ${fmt(o.sales)} · store stock ${fmt(o.stock)} · DC ${fmt(o.dc)}</div><div>Store stock ÷ MTD daily rate: ${o.sales ? Math.round(o.stock / (o.sales / (D.doneDays + 0.5))) + " days" : "no sales yet"}</div>`, p.px, p.py); };
+    r.onmouseleave = () => hideTip(box);
+  });
+}
+
+function niceTicks(max, n) {
+  const raw = max / n, mag = Math.pow(10, Math.floor(Math.log10(raw))), step = [1, 2, 2.5, 5, 10].map((s) => s * mag).find((s) => s >= raw);
+  const out = []; for (let v = 0; v <= max; v += step) out.push(v); return out;
+}
+</script>
+</body>
+</html>

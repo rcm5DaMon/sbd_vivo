@@ -1,0 +1,76 @@
+name: Refresh data
+
+# Manual refresh: Actions tab -> "Refresh data" -> "Run workflow" (one BigQuery query, ~0.4 GB scan).
+# A push to main (e.g. you edit index.html or sql/import.sql) only redeploys the site, no query.
+# To make the refresh automatic later, uncomment the schedule block. Cron is UTC: "30 0 * * *" = 07:30 WIB.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  # schedule:
+  #   - cron: "30 0 * * *"
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: refresh-and-deploy
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install --quiet google-cloud-bigquery
+
+      - name: Run import query
+        run: python scripts/refresh.py
+
+      - name: Commit new data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add data/sbd.json
+          if git diff --cached --quiet; then
+            echo "No change in data."
+          else
+            git commit -m "Refresh data $(TZ=Asia/Jakarta date '+%Y-%m-%d %H:%M') WIB"
+            git push
+          fi
+
+  deploy:
+    needs: refresh
+    if: always() && (needs.refresh.result == 'success' || needs.refresh.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Collect site files
+        run: |
+          mkdir -p _site/data
+          cp index.html _site/
+          cp data/sbd.json _site/data/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
