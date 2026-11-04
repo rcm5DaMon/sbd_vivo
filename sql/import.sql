@@ -76,15 +76,27 @@ today AS (
     AND sd.`Site Code` IN (SELECT site FROM tgt)
   GROUP BY ALL
 ),
-today_f AS (SELECT t.* FROM today t, asof, p WHERE t.d > asof.sales_asof AND t.d BETWEEN p.s AND p.e)
+today_f AS (SELECT t.* FROM today t, asof, p WHERE t.d > asof.sales_asof AND t.d BETWEEN p.s AND p.e),
+-- how far sales_daily is loaded (ALL brands/stores): if it already holds today, stores with no VIVO rows are inactive today
+sd_meta AS (
+  SELECT d AS sd_date, last_t AS sd_last_time FROM (
+    SELECT PARSE_DATE('%Y/%m/%d', `Date`) AS d, MAX(`Time`) AS last_t
+    FROM `e-smart-433113.region_data.sales_daily` GROUP BY 1)
+  ORDER BY d DESC LIMIT 1
+),
+today_meta AS (
+  SELECT IF(m.sd_date > a.sales_asof AND m.sd_date BETWEEN p.s AND p.e, m.sd_date, NULL) AS today_date,
+         IF(m.sd_date > a.sales_asof AND m.sd_date BETWEEN p.s AND p.e, m.sd_last_time, NULL) AS today_last_time
+  FROM sd_meta m, asof a, p
+)
 
 SELECT TO_JSON_STRING(STRUCT(
   (SELECT CAST(s AS STRING) FROM p) AS period_start,
   (SELECT CAST(e AS STRING) FROM p) AS period_end,
   (SELECT CAST(sales_asof AS STRING) FROM asof) AS sales_asof,
   (SELECT CAST(stock_date AS STRING) FROM stk_date) AS stock_date,
-  (SELECT CAST(MAX(d) AS STRING) FROM today_f) AS today_date,
-  (SELECT MAX(last_t) FROM today_f) AS today_last_time,
+  (SELECT CAST(today_date AS STRING) FROM today_meta) AS today_date,
+  (SELECT today_last_time FROM today_meta) AS today_last_time,
   CAST(CURRENT_DATETIME('Asia/Jakarta') AS STRING) AS refreshed_at,
   -- site|store|tsh|lob|target_device|target_above_low
   ARRAY(SELECT CONCAT(t.site, '|', IFNULL(s.s.store_name, ''), '|', IFNULL(s.s.tsh, ''), '|', IFNULL(s.s.lob, ''), '|', CAST(t.td AS STRING), '|', CAST(t.tal AS STRING))
