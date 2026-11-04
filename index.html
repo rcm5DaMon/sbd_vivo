@@ -67,6 +67,12 @@
                 padding: 5px 12px; cursor: pointer; }
   .seg button[aria-pressed="true"] { background: var(--series-1); color: #fff; }
   .spacer { flex: 1; }
+  .btn-ghost { font: inherit; font-size: 13px; color: var(--text-primary); background: var(--surface-1); border: 1px solid var(--border);
+               border-radius: 8px; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
+  .btn-ghost:hover { border-color: var(--text-muted); }
+  .btn-ghost[disabled] { opacity: .6; cursor: progress; }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--text-primary); color: var(--surface-1);
+           padding: 8px 14px; border-radius: 8px; font-size: 13px; z-index: 50; display: none; }
   .clear { font: inherit; font-size: 12px; color: var(--text-secondary); background: none; border: 1px solid var(--border);
            border-radius: 8px; padding: 4px 8px; cursor: pointer; }
   tbody tr { cursor: pointer; }
@@ -134,7 +140,8 @@
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="toast" id="toast" data-noshot></div>
+<div class="wrap" id="shotArea">
   <header>
     <div>
       <h1>VIVO Super Brand Day · Jakarta</h1>
@@ -289,12 +296,17 @@ function initFilters() {
   document.getElementById("sub").textContent =
     `Period ${longDate(j.period_start)} – ${longDate(j.period_end)} · day ${D.doneDays} of ${D.totalDays} complete · ${D.remDays} days left incl. today`;
   m.innerHTML = `
+    <button type="button" class="btn-ghost" id="shotSave" data-noshot title="Save the dashboard, as currently filtered, as a PNG">📷 Save PNG</button>
+    <button type="button" class="btn-ghost" id="shotCopy" data-noshot title="Copy the image so you can paste it into WhatsApp / email">Copy image</button>
     <span class="chip">Sales to ${longDate(j.sales_asof)}${j.today_date ? ` + today until ${j.today_last_time.slice(0,5)}` : ""}</span>
     <span class="chip">Stock ${longDate(j.stock_date)}</span>
     <span class="chip">Imported ${j.refreshed_at.slice(0,16)} WIB</span>
     ${GITHUB_REPO
       ? `<a class="btn" target="_blank" rel="noopener" href="https://github.com/${GITHUB_REPO}/actions/workflows/refresh.yml">Refresh data ↗</a>`
       : `<span class="btn" aria-disabled="true" title="Set GITHUB_REPO in index.html after deploying">Refresh data</span>`}`;
+  m.querySelectorAll(".btn").forEach((b) => b.setAttribute("data-noshot", ""));
+  document.getElementById("shotSave").onclick = () => takeShot("save");
+  document.getElementById("shotCopy").onclick = () => takeShot("copy");
   document.querySelectorAll(".f-asof").forEach((e) => e.textContent = longDate(j.sales_asof));
   document.querySelectorAll(".f-stock").forEach((e) => e.textContent = longDate(j.stock_date));
 
@@ -572,6 +584,91 @@ function renderModels(rows) {
     r.onmousemove = (e) => { const p = svgPoint(svg, e); tipAt(box, `<b>${esc(o.model)}</b><div>MTD sales ${fmt(o.sales)} · store stock ${fmt(o.stock)} · DC ${fmt(o.dc)}</div><div>Store stock ÷ MTD daily rate: ${o.sales ? Math.round(o.stock / (o.sales / (D.doneDays + 0.5))) + " days" : "no sales yet"}</div>`, p.px, p.py); };
     r.onmouseleave = () => hideTip(box);
   });
+}
+
+// ===== Screenshot: render the dashboard (as filtered) to PNG without external libraries =====
+function toast(msg, ms = 2500) {
+  const t = document.getElementById("toast"); t.textContent = msg; t.style.display = "block";
+  clearTimeout(toast._t); toast._t = setTimeout(() => (t.style.display = "none"), ms);
+}
+function shotName() {
+  const now = new Date(), p = (n) => String(n).padStart(2, "0");
+  const scope = state.store ? state.store + "_" + (STORES.find((s) => s.site === state.store) || {}).name
+              : state.tsh ? "TSH_" + state.tsh : "All";
+  return `SBD_VIVO_${scope}_${state.seg === "dev" ? "Device" : "AboveLow"}_${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}-${p(now.getHours())}${p(now.getMinutes())}.png`
+    .replace(/[^\w.\-]+/g, "_");
+}
+function cloneWithStyles(src) {
+  const dst = src.cloneNode(false);
+  if (src.nodeType === 1) {
+    const cs = getComputedStyle(src);
+    for (let i = 0; i < cs.length; i++) dst.style.setProperty(cs[i], cs.getPropertyValue(cs[i]));
+    if (src.tagName === "SELECT") {            // show the chosen option as plain text
+      const span = document.createElement("span");
+      for (let i = 0; i < cs.length; i++) span.style.setProperty(cs[i], cs.getPropertyValue(cs[i]));
+      span.style.display = "inline-block"; span.style.overflow = "hidden"; span.style.whiteSpace = "nowrap";
+      span.textContent = src.selectedOptions[0] ? src.selectedOptions[0].textContent : "";
+      return span;
+    }
+    if (src.tagName === "INPUT") {
+      if (src.type === "checkbox") { if (src.checked) dst.setAttribute("checked", ""); }
+      else dst.setAttribute("value", src.value);
+    }
+  }
+  for (const c of src.childNodes) {
+    if (c.nodeType === 1 && (c.hasAttribute("data-noshot") || c.classList.contains("tip"))) continue;
+    if (c.nodeType === 8) continue;
+    dst.appendChild(cloneWithStyles(c));
+  }
+  return dst;
+}
+async function renderShot() {
+  const area = document.getElementById("shotArea");
+  const clone = cloneWithStyles(area);
+  // show the whole store table (no inner scroll), no sticky headers
+  clone.querySelectorAll(".tscroll").forEach((e) => { e.style.maxHeight = "none"; e.style.overflow = "visible"; });
+  clone.querySelectorAll("th, tfoot td").forEach((e) => { e.style.position = "static"; });
+  clone.style.margin = "0";
+  const W = Math.ceil(area.getBoundingClientRect().width);
+  clone.style.width = W + "px";
+  // measure the expanded height off-screen
+  const holder = document.createElement("div");
+  holder.style.cssText = "position:absolute;left:-100000px;top:0;";
+  holder.appendChild(clone); document.body.appendChild(holder);
+  const H = Math.ceil(clone.getBoundingClientRect().height);
+  document.body.removeChild(holder);
+  const bg = getComputedStyle(document.body).backgroundColor;
+  const xml = new XMLSerializer().serializeToString(clone);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><foreignObject x="0" y="0" width="100%" height="100%">` +
+              `<div xmlns="http://www.w3.org/1999/xhtml" style="background:${bg};width:${W}px;height:${H}px">${xml}</div></foreignObject></svg>`;
+  const img = new Image();
+  img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  await img.decode();
+  const scale = 2, canvas = document.createElement("canvas");
+  canvas.width = W * scale; canvas.height = H * scale;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.scale(scale, scale); ctx.drawImage(img, 0, 0);
+  return new Promise((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error("toBlob failed"))), "image/png"));
+}
+async function takeShot(mode) {
+  const btns = [document.getElementById("shotSave"), document.getElementById("shotCopy")];
+  btns.forEach((b) => (b.disabled = true)); toast("Capturing…", 10000);
+  try {
+    if (mode === "copy" && navigator.clipboard && window.ClipboardItem) {
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": renderShot() })]);
+      toast("Image copied - paste it into WhatsApp / email (Ctrl+V)");
+    } else {
+      const blob = await renderShot();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob); a.download = shotName();
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      toast(mode === "copy" ? "Copy isn't supported in this browser - saved as PNG instead" : "Saved " + a.download);
+    }
+  } catch (e) {
+    console.error(e); toast("Screenshot failed: " + e.message, 5000);
+  } finally { btns.forEach((b) => (b.disabled = false)); }
 }
 
 function niceTicks(max, n) {
