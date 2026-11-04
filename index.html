@@ -67,6 +67,14 @@
                 padding: 5px 12px; cursor: pointer; }
   .seg button[aria-pressed="true"] { background: var(--series-1); color: #fff; }
   .spacer { flex: 1; }
+  .est { margin-top: 6px; font-size: 12px; color: var(--text-secondary); }
+  .est b { font-size: 15px; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+  .inact { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: baseline; margin-top: 4px; }
+  .inact button { font: inherit; text-align: left; background: none; border: 0; padding: 0; cursor: pointer; color: var(--text-primary); }
+  .inact button b { font-size: 24px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .inact button[aria-pressed="true"] b { color: var(--series-1); text-decoration: underline; }
+  .inact span { font-size: 12px; color: var(--text-secondary); }
+  .banner { display: none; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); margin: -8px 0 12px; }
   .btn-ghost { font: inherit; font-size: 13px; color: var(--text-primary); background: var(--surface-1); border: 1px solid var(--border);
                border-radius: 8px; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
   .btn-ghost:hover { border-color: var(--text-muted); }
@@ -78,7 +86,7 @@
   tbody tr { cursor: pointer; }
   tbody tr.sel { background: var(--series-1-soft); }
 
-  .kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
   .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
   .kpi .label { font-size: 12px; color: var(--text-secondary); }
   .kpi .value { font-size: 28px; font-weight: 650; letter-spacing: -0.02em; margin-top: 2px; font-variant-numeric: tabular-nums; }
@@ -137,6 +145,9 @@
     .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .grid2 { grid-template-columns: 1fr; }
   }
+  @media (min-width: 1001px) and (max-width: 1250px) {
+    .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
 </style>
 </head>
 <body>
@@ -164,6 +175,7 @@
   </div>
 
   <section class="kpis" id="kpis"></section>
+  <div class="banner" id="inactBanner" data-noshot></div>
 
   <section class="grid2">
     <div class="card">
@@ -186,7 +198,7 @@
     <div class="table-head">
       <div>
         <h2>Store achievement</h2>
-        <p class="note" style="margin:0">Click a column to sort, or a store row to filter the whole page to that store. "Need / day" = remaining target ÷ remaining days (incl. today). Stock flag compares store stock with the remaining gap.</p>
+        <p class="note" style="margin:0">"Est. Achv" = month-end projection at the current run-rate ÷ target. Click a column to sort, or a store row to filter the whole page to that store. "Need / day" = remaining target ÷ remaining days (incl. today). Stock flag compares store stock with the remaining gap.</p>
       </div>
     </div>
     <div class="tscroll">
@@ -221,7 +233,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 const parseDate = (s) => new Date(s + "T00:00:00");
 const dayMs = 86400000;
 
-let D, STORES, state = { tsh: "", store: "", seg: "dev", targetOnly: true, q: "", sortKey: "gapPace", sortDir: "asc" };
+let D, STORES, state = { tsh: "", store: "", inactive: "", seg: "dev", targetOnly: true, q: "", sortKey: "gapPace", sortDir: "asc" };
 
 fetch("data/sbd.json", { cache: "no-store" })
   .then((r) => r.json())
@@ -340,12 +352,20 @@ function setStore(site) {
   fillStores(); render();
 }
 
-function filtered() {
+function isInactive(s, kind) {
+  const k = state.seg;
+  return kind === "today" ? s.today[k] === 0 : s.mtd[k] === 0;
+}
+function baseFiltered() {
   if (state.store) return STORES.filter((s) => s.site === state.store);
   return STORES.filter((s) => !s.isDC
     && (!state.tsh || s.tsh === state.tsh)
     && (!state.targetOnly || s.tDev > 0)
     && (!state.q || s.name.toLowerCase().includes(state.q) || s.site.toLowerCase().includes(state.q)));
+}
+function filtered() {
+  const rows = baseFiltered();
+  return state.inactive ? rows.filter((s) => isInactive(s, state.inactive)) : rows;
 }
 
 // per-store metrics for the active segment
@@ -356,7 +376,9 @@ function metrics(s) {
   const achv = target ? actual / target : null;
   const pace = expected ? done / expected : null;   // completed days vs expected
   const gap = Math.max(0, target - actual);
-  return { target, actual, done, today: s.today[k], expected, achv, pace, gap, need: gap / D.remDays,
+  const estQty = D.doneDays ? done / D.doneDays * D.totalDays : null;   // month-end projection at current run-rate
+  const estAchv = target && estQty != null ? estQty / target : null;
+  return { target, actual, done, today: s.today[k], expected, achv, pace, gap, estQty, estAchv, need: gap / D.remDays,
            oct: s.oct[k], ly: s.ly[k], stock: s.stock[k], gapPace: target ? (actual - target * (D.doneDays + 1) / D.totalDays) : 1e9 };
 }
 
@@ -370,7 +392,12 @@ const statusHtml = ([cls, label]) => `<span class="status ${cls}"><i class="dot"
 
 function render() {
   const rows = filtered();
-  renderKpis(rows); renderPace(rows); renderTsh(); renderTable(rows); renderModels(rows);
+  renderKpis(state.inactive ? baseFiltered() : rows);
+  document.getElementById("paceNote").textContent = `${state.seg === "dev" ? "Device" : "Above Low"} units · ${rows.length} store${rows.length === 1 ? "" : "s"} in filter · completed days only, today shown as a separate point`;
+  const bn = document.getElementById("inactBanner");
+  bn.style.display = state.inactive ? "flex" : "none";
+  bn.innerHTML = state.inactive ? `Showing only stores with <b>no ${state.seg === "dev" ? "Device" : "Above Low"} sales ${state.inactive === "today" ? "today" : "month-to-date"}</b> (${rows.length}). <button type="button" class="clear" id="inactClear">✕ Show all</button>` : "";
+  if (state.inactive) document.getElementById("inactClear").onclick = () => { state.inactive = ""; render(); }; renderPace(rows); renderTsh(); renderTable(rows); renderModels(rows);
 }
 
 function renderKpis(rows) {
@@ -382,10 +409,12 @@ function renderKpis(rows) {
   const expFrac = D.doneDays / D.totalDays;
   const card = (label, x) => {
     const achv = x.t ? x.a / x.t : null, pace = x.t ? x.d / (x.t * expFrac) : null;
+    const est = D.doneDays ? x.d / D.doneDays * D.totalDays : null;
     return `<div class="card kpi"><div class="label">${label} achievement</div>
       <div class="value">${pct(achv)} <small>${fmt(x.a)} / ${fmt(x.t)}</small></div>
       <div class="bar" title="Tick = expected by end of day ${D.doneDays}"><i style="width:${Math.min(100, (achv || 0) * 100)}%"></i><b style="left:${expFrac * 100}%"></b></div>
-      <div class="foot">${statusHtml(statusOf(pace, x.t > 0))} · expected ${pct(expFrac)} by now</div></div>`;
+      <div class="foot">${statusHtml(statusOf(pace, x.t > 0))} · expected ${pct(expFrac)} by now</div>
+      <div class="est" title="Month-end estimate = sales on completed days ÷ ${D.doneDays} days × ${D.totalDays} days">Est. month-end <b>${x.t && est != null ? pct(est / x.t) : "—"}</b> · ${est != null ? fmt(est) : "—"} units</div></div>`;
   };
   const a = kd(seg);
   const runRate = D.doneDays ? a.d / D.doneDays : 0;
@@ -402,11 +431,30 @@ function renderKpis(rows) {
      <div class="card kpi"><div class="label">Today so far · ${segLabel}</div>
       <div class="value">${fmt(today)} <small>units</small></div>
       <div class="foot">${D.j.today_date ? "POS until " + D.j.today_last_time.slice(0,5) + " WIB" : "No intraday data yet"} · day target ≈ ${(a.t / D.totalDays).toFixed(1)}</div></div>
+     ${inactiveCard(rows, segLabel)}
      <div class="card kpi"><div class="label">Stock · ${segLabel} units</div>
       <div class="value">${fmt(stock)} <small>store</small></div>
       <div class="foot">+ ${fmt(dc)} at DC · remaining gap ${fmt(gap)} · <b>${short}</b> store${short === 1 ? "" : "s"} with stock below gap</div></div>`;
+  document.querySelectorAll("[data-inact]").forEach((b) => b.onclick = () => {
+    state.inactive = state.inactive === b.dataset.inact ? "" : b.dataset.inact; render();
+  });
   document.getElementById("paceNote").textContent =
     `${segLabel} units · ${rows.length} store${rows.length === 1 ? "" : "s"} in filter · completed days only, today shown as a separate point`;
+}
+
+function inactiveCard(rows, segLabel) {
+  const n = rows.length, k = state.seg;
+  const tod = rows.filter((s) => s.today[k] === 0), mtd = rows.filter((s) => s.mtd[k] === 0);
+  const hasToday = !!D.j.today_date;
+  const list = (arr) => esc(arr.map((s) => s.site + " " + s.name.replace(/^ERAFONE\s+/, "")).join("\n"));
+  return `<div class="card kpi"><div class="label">Inactive stores · no ${segLabel} sales</div>
+    <div class="inact">
+      <button type="button" data-inact="today" aria-pressed="${state.inactive === "today"}" ${hasToday ? "" : "disabled"} title="${hasToday ? list(tod) : ""}"><b>${hasToday ? fmt(tod.length) : "—"}</b></button>
+      <span>today ${hasToday ? `of ${n} · POS until ${D.j.today_last_time.slice(0, 5)}` : "· today's POS not loaded yet"}</span>
+      <button type="button" data-inact="mtd" aria-pressed="${state.inactive === "mtd"}" title="${list(mtd)}"><b>${fmt(mtd.length)}</b></button>
+      <span>month-to-date of ${n}</span>
+    </div>
+    <div class="foot">Click a number to list those stores</div></div>`;
 }
 
 // ---------- tooltip helper ----------
@@ -478,7 +526,7 @@ function renderTsh() {
   const by = new Map();
   base.forEach((s) => {
     const o = by.get(s.tsh) || { tsh: s.tsh, t: 0, a: 0, n: 0 };
-    o.t += seg === "dev" ? s.tDev : s.tAl; o.a += s.mtd[seg]; o.n++; by.set(s.tsh, o);
+    o.t += seg === "dev" ? s.tDev : s.tAl; o.a += s.mtd[seg]; o.d = (o.d || 0) + s.done[seg]; o.n++; by.set(s.tsh, o);
   });
   const list = [...by.values()].filter((o) => o.t > 0).sort((a, b) => b.a / b.t - a.a / a.t);
   const W = 420, rowH = 40, m = { l: 132, r: 56, t: 6 }, H = m.t + list.length * rowH + 22, iw = W - m.l - m.r;
@@ -501,7 +549,7 @@ function renderTsh() {
   svg.innerHTML = g;
   svg.querySelectorAll(".hit").forEach((r) => {
     const o = list[+r.dataset.i];
-    r.onmousemove = (e) => { const p = svgPoint(svg, e); tipAt(box, `<div><b>${esc(o.tsh)}</b></div><div>Actual <b>${fmt(o.a)}</b> / target <b>${fmt(o.t)}</b> (${pct(o.a / o.t)})</div><div>Expected by now ${pct(expFrac)} · gap ${fmt(Math.max(0, o.t - o.a))}</div><div style="color:var(--text-muted)">Click to filter</div>`, p.px, p.py); };
+    r.onmousemove = (e) => { const p = svgPoint(svg, e); tipAt(box, `<div><b>${esc(o.tsh)}</b></div><div>Actual <b>${fmt(o.a)}</b> / target <b>${fmt(o.t)}</b> (${pct(o.a / o.t)})</div><div>Expected by now ${pct(expFrac)} · gap ${fmt(Math.max(0, o.t - o.a))}</div><div>Est. month-end ${D.doneDays ? pct(o.d / D.doneDays * D.totalDays / o.t) : "—"}</div><div style="color:var(--text-muted)">Click to filter</div>`, p.px, p.py); };
     r.onmouseleave = () => hideTip(box);
     r.style.cursor = "pointer";
     r.onclick = () => { state.tsh = state.tsh === o.tsh ? "" : o.tsh; state.store = ""; document.getElementById("fTsh").value = state.tsh; fillStores(); render(); };
@@ -512,9 +560,9 @@ function renderTable(rows) {
   const t = document.getElementById("storeTable"), segLabel = state.seg === "dev" ? "Device" : "Above Low";
   const cols = [
     ["name", "Store", "l"], ["tsh", "TSH", "l"], ["target", "Target"], ["actual", "MTD"], ["today", "Today"],
-    ["achv", "Achv"], ["gapPace", "Status"], ["gap", "Gap"], ["need", "Need / day"],
+    ["achv", "Achv"], ["estAchv", "Est. Achv"], ["gapPace", "Status"], ["gap", "Gap"], ["need", "Need / day"],
     ["oct", "Oct-26"], ["ly", "Nov-25"], ["stock", "Stock"], ["cover", "Stock vs gap"]];
-  t.tHead.innerHTML = `<tr>${cols.map(([k, l, c], i) => `<th data-k="${k}" class="${c || ""}" ${state.sortKey === k ? `aria-sort="${state.sortDir === "asc" ? "ascending" : "descending"}"` : ""}>${i === 2 ? `<span class="grp">${segLabel}</span>` : i === 9 ? `<span class="grp">Reference (full month)</span>` : i === 11 ? `<span class="grp">Store stock ${D.j.stock_date.slice(8)}/${D.j.stock_date.slice(5,7)}</span>` : `<span class="grp">&nbsp;</span>`}${l}</th>`).join("")}</tr>`;
+  t.tHead.innerHTML = `<tr>${cols.map(([k, l, c], i) => `<th data-k="${k}" class="${c || ""}" ${state.sortKey === k ? `aria-sort="${state.sortDir === "asc" ? "ascending" : "descending"}"` : ""}>${i === 2 ? `<span class="grp">${segLabel}</span>` : i === 10 ? `<span class="grp">Reference (full month)</span>` : i === 12 ? `<span class="grp">Store stock ${D.j.stock_date.slice(8)}/${D.j.stock_date.slice(5,7)}</span>` : `<span class="grp">&nbsp;</span>`}${l}</th>`).join("")}</tr>`;
   const data = rows.map((s) => ({ s, m: metrics(s) }));
   const key = state.sortKey, dir = state.sortDir === "asc" ? 1 : -1;
   const val = (o) => key === "name" ? o.s.name : key === "tsh" ? o.s.tsh : key === "cover" ? (o.m.gap ? o.m.stock / o.m.gap : 1e9) : (o.m[key] ?? -1);
@@ -533,6 +581,7 @@ function renderTable(rows) {
       <td>${fmt(m.actual)}</td>
       <td class="${m.today ? "" : "muted"}">${fmt(m.today)}</td>
       <td>${has ? `<span class="mini"><i style="width:${Math.min(100, m.achv * 100)}%"></i><b style="left:${expFrac * 100}%"></b></span>${pct(m.achv)}` : `<span class="muted">—</span>`}</td>
+      <td title="Month-end estimate ${m.estQty != null ? fmt(m.estQty) : "—"} units">${has ? pct(m.estAchv) : `<span class="muted">—</span>`}</td>
       <td>${statusHtml(st)}</td>
       <td>${has ? fmt(m.gap) : "—"}</td>
       <td>${has ? m.need.toFixed(1) : "—"}</td>
@@ -540,12 +589,12 @@ function renderTable(rows) {
       <td>${fmt(m.ly)}</td>
       <td>${fmt(m.stock)}</td>
       <td>${cover}</td></tr>`;
-  }).join("") || `<tr><td class="l" colspan="13">No stores match the filter.</td></tr>`;
+  }).join("") || `<tr><td class="l" colspan="14">No stores match the filter.</td></tr>`;
   const tot = data.reduce((a, { m }) => { ["target", "actual", "today", "gap", "oct", "ly", "stock"].forEach((k) => a[k] += m[k]); a.done += m.done; return a; },
     { target: 0, actual: 0, today: 0, gap: 0, oct: 0, ly: 0, stock: 0, done: 0 });
   const tp = tot.target ? tot.done / (tot.target * expFrac) : null;
   t.tFoot.innerHTML = `<tr><td class="l">Total · ${data.length} stores</td><td></td><td>${fmt(tot.target)}</td><td>${fmt(tot.actual)}</td><td>${fmt(tot.today)}</td>
-    <td>${pct(tot.target ? tot.actual / tot.target : null)}</td><td>${statusHtml(statusOf(tp, tot.target > 0))}</td><td>${fmt(tot.gap)}</td>
+    <td>${pct(tot.target ? tot.actual / tot.target : null)}</td><td>${tot.target && D.doneDays ? pct(tot.done / D.doneDays * D.totalDays / tot.target) : "—"}</td><td>${statusHtml(statusOf(tp, tot.target > 0))}</td><td>${fmt(tot.gap)}</td>
     <td>${(tot.gap / D.remDays).toFixed(1)}</td><td>${fmt(tot.oct)}</td><td>${fmt(tot.ly)}</td><td>${fmt(tot.stock)}</td><td></td></tr>`;
 }
 
