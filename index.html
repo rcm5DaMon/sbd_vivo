@@ -61,12 +61,16 @@
   .filters label { font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
   select, input[type=search] { font: inherit; font-size: 13px; color: var(--text-primary); background: var(--surface-0);
          border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; }
-  input[type=search] { min-width: 200px; }
+  input[type=search] { min-width: 160px; }
   .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
   .seg button { font: inherit; font-size: 13px; background: var(--surface-0); color: var(--text-secondary); border: 0;
                 padding: 5px 12px; cursor: pointer; }
   .seg button[aria-pressed="true"] { background: var(--series-1); color: #fff; }
   .spacer { flex: 1; }
+  .clear { font: inherit; font-size: 12px; color: var(--text-secondary); background: none; border: 1px solid var(--border);
+           border-radius: 8px; padding: 4px 8px; cursor: pointer; }
+  tbody tr { cursor: pointer; }
+  tbody tr.sel { background: var(--series-1-soft); }
 
   .kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
   .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
@@ -141,6 +145,8 @@
 
   <div class="filters" role="group" aria-label="Filters">
     <label>TSH <select id="fTsh"><option value="">All TSH</option></select></label>
+    <label>Store <select id="fStore" style="max-width:280px"><option value="">All stores</option></select></label>
+    <button type="button" id="fClear" class="clear" hidden>✕ Clear store</button>
     <span class="seg" role="group" aria-label="Segment">
       <button type="button" data-seg="dev" aria-pressed="true">All Device</button>
       <button type="button" data-seg="al" aria-pressed="false">Above Low</button>
@@ -173,7 +179,7 @@
     <div class="table-head">
       <div>
         <h2>Store achievement</h2>
-        <p class="note" style="margin:0">Click a column to sort. "Need / day" = remaining target ÷ remaining days (incl. today). Stock flag compares store stock with the remaining gap.</p>
+        <p class="note" style="margin:0">Click a column to sort, or a store row to filter the whole page to that store. "Need / day" = remaining target ÷ remaining days (incl. today). Stock flag compares store stock with the remaining gap.</p>
       </div>
     </div>
     <div class="tscroll">
@@ -208,7 +214,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 const parseDate = (s) => new Date(s + "T00:00:00");
 const dayMs = 86400000;
 
-let D, STORES, state = { tsh: "", seg: "dev", targetOnly: true, q: "", sortKey: "gapPace", sortDir: "asc" };
+let D, STORES, state = { tsh: "", store: "", seg: "dev", targetOnly: true, q: "", sortKey: "gapPace", sortDir: "asc" };
 
 fetch("data/sbd.json", { cache: "no-store" })
   .then((r) => r.json())
@@ -263,13 +269,19 @@ function initFilters() {
   const tshs = [...new Set(STORES.filter((s) => !s.isDC).map((s) => s.tsh))].sort();
   const sel = document.getElementById("fTsh");
   tshs.forEach((t) => sel.insertAdjacentHTML("beforeend", `<option>${esc(t)}</option>`));
-  sel.onchange = () => { state.tsh = sel.value; render(); };
+  sel.onchange = () => { state.tsh = sel.value; fillStores(); render(); };
+  document.getElementById("fStore").onchange = (e) => setStore(e.target.value);
+  document.getElementById("fClear").onclick = () => setStore("");
+  document.querySelector("#storeTable tbody").onclick = (e) => {
+    const tr = e.target.closest("tr[data-site]"); if (tr) setStore(state.store === tr.dataset.site ? "" : tr.dataset.site);
+  };
+  fillStores();
   document.querySelectorAll(".seg button").forEach((b) => b.onclick = () => {
     state.seg = b.dataset.seg;
     document.querySelectorAll(".seg button").forEach((x) => x.setAttribute("aria-pressed", x === b));
     render();
   });
-  document.getElementById("fTargetOnly").onchange = (e) => { state.targetOnly = e.target.checked; render(); };
+  document.getElementById("fTargetOnly").onchange = (e) => { state.targetOnly = e.target.checked; fillStores(); render(); };
   document.getElementById("fSearch").oninput = (e) => { state.q = e.target.value.trim().toLowerCase(); render(); };
 
   const j = D.j, m = document.getElementById("meta");
@@ -294,7 +306,30 @@ function initFilters() {
   });
 }
 
+// Store dropdown: grouped by TSH, limited to the chosen TSH and the "only stores with a target" box
+function fillStores() {
+  const el = document.getElementById("fStore");
+  const list = STORES.filter((s) => !s.isDC && (!state.tsh || s.tsh === state.tsh) && (!state.targetOnly || s.tDev > 0));
+  if (state.store && !list.some((s) => s.site === state.store)) state.store = "";
+  const groups = new Map();
+  list.sort((a, b) => a.tsh.localeCompare(b.tsh) || a.name.localeCompare(b.name))
+      .forEach((s) => (groups.get(s.tsh) || groups.set(s.tsh, []).get(s.tsh)).push(s));
+  el.innerHTML = `<option value="">All stores (${list.length})</option>` + [...groups].map(([tsh, ss]) =>
+    `<optgroup label="${esc(tsh)}">${ss.map((s) => `<option value="${s.site}">${s.site} · ${esc(s.name.replace(/^ERAFONE\s+/, ""))}</option>`).join("")}</optgroup>`).join("");
+  el.value = state.store;
+  document.getElementById("fClear").hidden = !state.store;
+}
+function setStore(site) {
+  state.store = site;
+  if (site) {   // keep the TSH box consistent with the picked store
+    const s = STORES.find((x) => x.site === site);
+    if (state.tsh && s.tsh !== state.tsh) { state.tsh = ""; document.getElementById("fTsh").value = ""; }
+  }
+  fillStores(); render();
+}
+
 function filtered() {
+  if (state.store) return STORES.filter((s) => s.site === state.store);
   return STORES.filter((s) => !s.isDC
     && (!state.tsh || s.tsh === state.tsh)
     && (!state.targetOnly || s.tDev > 0)
@@ -359,7 +394,7 @@ function renderKpis(rows) {
       <div class="value">${fmt(stock)} <small>store</small></div>
       <div class="foot">+ ${fmt(dc)} at DC · remaining gap ${fmt(gap)} · <b>${short}</b> store${short === 1 ? "" : "s"} with stock below gap</div></div>`;
   document.getElementById("paceNote").textContent =
-    `${segLabel} units · ${rows.length} stores in filter · completed days only, today shown as a separate point`;
+    `${segLabel} units · ${rows.length} store${rows.length === 1 ? "" : "s"} in filter · completed days only, today shown as a separate point`;
 }
 
 // ---------- tooltip helper ----------
@@ -441,7 +476,8 @@ function renderTsh() {
   let g = "";
   [0, 0.25, 0.5, 0.75, 1].filter((v) => v <= maxV).forEach((v) => g += `<line x1="${x(v)}" x2="${x(v)}" y1="${m.t}" y2="${H - 20}" stroke="var(--grid)"/><text x="${x(v)}" y="${H - 6}" text-anchor="middle">${v * 100}%</text>`);
   list.forEach((o, i) => {
-    const yy = m.t + i * rowH + 8, ach = o.a / o.t, sel = !state.tsh || state.tsh === o.tsh;
+    const storeTsh = state.store ? (STORES.find((s) => s.site === state.store) || {}).tsh : "";
+    const yy = m.t + i * rowH + 8, ach = o.a / o.t, sel = storeTsh ? storeTsh === o.tsh : (!state.tsh || state.tsh === o.tsh);
     const name = o.tsh.split(" ").slice(0, 2).join(" ");
     g += `<text x="${m.l - 8}" y="${yy + 9}" text-anchor="end" style="fill:var(--text-primary)">${esc(name)}</text>
       <text x="${m.l - 8}" y="${yy + 23}" text-anchor="end">${o.n} store${o.n === 1 ? "" : "s"}</text>
@@ -456,7 +492,7 @@ function renderTsh() {
     r.onmousemove = (e) => { const p = svgPoint(svg, e); tipAt(box, `<div><b>${esc(o.tsh)}</b></div><div>Actual <b>${fmt(o.a)}</b> / target <b>${fmt(o.t)}</b> (${pct(o.a / o.t)})</div><div>Expected by now ${pct(expFrac)} · gap ${fmt(Math.max(0, o.t - o.a))}</div><div style="color:var(--text-muted)">Click to filter</div>`, p.px, p.py); };
     r.onmouseleave = () => hideTip(box);
     r.style.cursor = "pointer";
-    r.onclick = () => { state.tsh = state.tsh === o.tsh ? "" : o.tsh; document.getElementById("fTsh").value = state.tsh; render(); };
+    r.onclick = () => { state.tsh = state.tsh === o.tsh ? "" : o.tsh; state.store = ""; document.getElementById("fTsh").value = state.tsh; fillStores(); render(); };
   });
 }
 
@@ -478,7 +514,7 @@ function renderTable(rows) {
       : m.stock >= m.gap ? `<span class="status s-good"><i class="dot"></i>Covered</span>`
       : m.stock >= m.gap * 0.5 ? `<span class="status s-warn"><i class="dot"></i>Short ${fmt(m.gap - m.stock)}</span>`
       : `<span class="status s-crit"><i class="dot"></i>Short ${fmt(m.gap - m.stock)}</span>`;
-    return `<tr>
+    return `<tr data-site="${s.site}" class="${state.store === s.site ? "sel" : ""}" title="Click to show only this store (click again to clear)">
       <td class="l store" title="${esc(s.name)}"><span class="site">${s.site}</span>${esc(s.name.replace(/^ERAFONE\s+/, ""))}</td>
       <td class="l tsh" title="${esc(s.tsh)}">${esc(s.tsh.split(" ").slice(0, 2).join(" "))}</td>
       <td>${has ? fmt(m.target) : `<span class="muted">0</span>`}</td>
