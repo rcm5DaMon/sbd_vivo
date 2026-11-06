@@ -198,7 +198,7 @@
     <div class="table-head">
       <div>
         <h2>Store achievement</h2>
-        <p class="note" style="margin:0">"Est. Achv" = month-end projection at the current run-rate ÷ target. Click a column to sort, or a store row to filter the whole page to that store. "Need / day" = remaining target ÷ remaining days (incl. today). Stock flag compares store stock with the remaining gap.</p>
+        <p class="note" style="margin:0">Status compares MTD (incl. today) with the target pro-rata for completed days. "Est. Achv" = (MTD incl. today + completed-day average × days left after today) ÷ target. Click a column to sort, or a store row to filter the whole page to that store. "Need / day" = remaining target ÷ remaining days (incl. today). Stock flag compares store stock with the remaining gap.</p>
       </div>
     </div>
     <div class="tscroll">
@@ -374,13 +374,27 @@ function metrics(s) {
   const actual = s.mtd[k], done = s.done[k];
   const expected = target * D.doneDays / D.totalDays;
   const achv = target ? actual / target : null;
-  const pace = expected ? done / expected : null;   // completed days vs expected
+  const pace = paceOf(actual, target);
   const gap = Math.max(0, target - actual);
-  const estQty = D.doneDays ? done / D.doneDays * D.totalDays : null;   // month-end projection at current run-rate
+  const estQty = estOf(actual, done);
   const estAchv = target && estQty != null ? estQty / target : null;
   return { target, actual, done, today: s.today[k], expected, achv, pace, gap, estQty, estAchv, need: gap / D.remDays,
            oct: s.oct[k], ly: s.ly[k], stock: s.stock[k], gapPace: target ? (actual - target * (D.doneDays + 1) / D.totalDays) : 1e9 };
 }
+
+// Pace = actual MTD (incl. today) vs target pro-rata for completed days ("expected by now")
+function paceOf(actual, target) {
+  if (!target) return null;
+  const exp = target * D.doneDays / D.totalDays;
+  return exp ? actual / exp : 1;
+}
+// Month-end estimate = actual MTD (incl. today) + completed-day average x days left after today
+function estOf(actual, done) {
+  const rate = D.doneDays ? done / D.doneDays : 0;
+  const left = Math.max(0, D.totalDays - D.doneDays - (D.j.today_date ? 1 : 0));
+  return actual + rate * left;
+}
+const EST_TIP = "Est. month-end = MTD incl. today + average of completed days x days left after today";
 
 function statusOf(pace, hasTarget) {
   if (!hasTarget) return ["s-none", "No target"];
@@ -408,13 +422,13 @@ function renderKpis(rows) {
   const dev = kd("dev"), al = kd("al");
   const expFrac = D.doneDays / D.totalDays;
   const card = (label, x) => {
-    const achv = x.t ? x.a / x.t : null, pace = x.t ? x.d / (x.t * expFrac) : null;
-    const est = D.doneDays ? x.d / D.doneDays * D.totalDays : null;
+    const achv = x.t ? x.a / x.t : null, pace = paceOf(x.a, x.t);
+    const est = estOf(x.a, x.d);
     return `<div class="card kpi"><div class="label">${label} achievement</div>
       <div class="value">${pct(achv)} <small>${fmt(x.a)} / ${fmt(x.t)}</small></div>
       <div class="bar" title="Tick = expected by end of day ${D.doneDays}"><i style="width:${Math.min(100, (achv || 0) * 100)}%"></i><b style="left:${expFrac * 100}%"></b></div>
       <div class="foot">${statusHtml(statusOf(pace, x.t > 0))} · expected ${pct(expFrac)} by now</div>
-      <div class="est" title="Month-end estimate = sales on completed days ÷ ${D.doneDays} days × ${D.totalDays} days">Est. month-end <b>${x.t && est != null ? pct(est / x.t) : "—"}</b> · ${est != null ? fmt(est) : "—"} units</div></div>`;
+      <div class="est" title="${EST_TIP}">Est. month-end <b>${x.t && est != null ? pct(est / x.t) : "—"}</b> · ${est != null ? fmt(est) : "—"} units</div></div>`;
   };
   const a = kd(seg);
   const runRate = D.doneDays ? a.d / D.doneDays : 0;
@@ -549,7 +563,7 @@ function renderTsh() {
   svg.innerHTML = g;
   svg.querySelectorAll(".hit").forEach((r) => {
     const o = list[+r.dataset.i];
-    r.onmousemove = (e) => { const p = svgPoint(svg, e); tipAt(box, `<div><b>${esc(o.tsh)}</b></div><div>Actual <b>${fmt(o.a)}</b> / target <b>${fmt(o.t)}</b> (${pct(o.a / o.t)})</div><div>Expected by now ${pct(expFrac)} · gap ${fmt(Math.max(0, o.t - o.a))}</div><div>Est. month-end ${D.doneDays ? pct(o.d / D.doneDays * D.totalDays / o.t) : "—"}</div><div style="color:var(--text-muted)">Click to filter</div>`, p.px, p.py); };
+    r.onmousemove = (e) => { const p = svgPoint(svg, e); tipAt(box, `<div><b>${esc(o.tsh)}</b></div><div>Actual <b>${fmt(o.a)}</b> / target <b>${fmt(o.t)}</b> (${pct(o.a / o.t)})</div><div>Expected by now ${pct(expFrac)} · gap ${fmt(Math.max(0, o.t - o.a))}</div><div>Est. month-end ${pct(estOf(o.a, o.d) / o.t)}</div><div style="color:var(--text-muted)">Click to filter</div>`, p.px, p.py); };
     r.onmouseleave = () => hideTip(box);
     r.style.cursor = "pointer";
     r.onclick = () => { state.tsh = state.tsh === o.tsh ? "" : o.tsh; state.store = ""; document.getElementById("fTsh").value = state.tsh; fillStores(); render(); };
@@ -592,9 +606,9 @@ function renderTable(rows) {
   }).join("") || `<tr><td class="l" colspan="14">No stores match the filter.</td></tr>`;
   const tot = data.reduce((a, { m }) => { ["target", "actual", "today", "gap", "oct", "ly", "stock"].forEach((k) => a[k] += m[k]); a.done += m.done; return a; },
     { target: 0, actual: 0, today: 0, gap: 0, oct: 0, ly: 0, stock: 0, done: 0 });
-  const tp = tot.target ? tot.done / (tot.target * expFrac) : null;
+  const tp = paceOf(tot.actual, tot.target);
   t.tFoot.innerHTML = `<tr><td class="l">Total · ${data.length} stores</td><td></td><td>${fmt(tot.target)}</td><td>${fmt(tot.actual)}</td><td>${fmt(tot.today)}</td>
-    <td>${pct(tot.target ? tot.actual / tot.target : null)}</td><td>${tot.target && D.doneDays ? pct(tot.done / D.doneDays * D.totalDays / tot.target) : "—"}</td><td>${statusHtml(statusOf(tp, tot.target > 0))}</td><td>${fmt(tot.gap)}</td>
+    <td>${pct(tot.target ? tot.actual / tot.target : null)}</td><td>${tot.target ? pct(estOf(tot.actual, tot.done) / tot.target) : "—"}</td><td>${statusHtml(statusOf(tp, tot.target > 0))}</td><td>${fmt(tot.gap)}</td>
     <td>${(tot.gap / D.remDays).toFixed(1)}</td><td>${fmt(tot.oct)}</td><td>${fmt(tot.ly)}</td><td>${fmt(tot.stock)}</td><td></td></tr>`;
 }
 
