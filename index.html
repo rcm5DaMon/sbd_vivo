@@ -67,6 +67,8 @@
                 padding: 5px 12px; cursor: pointer; }
   .seg button[aria-pressed="true"] { background: var(--series-1); color: #fff; }
   .spacer { flex: 1; }
+  .borlink { color: inherit; text-decoration: none; border-bottom: 1px dashed var(--text-muted); }
+  .borlink:hover { color: var(--series-1); }
   .est { margin-top: 6px; font-size: 12px; color: var(--text-secondary); }
   .est b { font-size: 15px; color: var(--text-primary); font-variant-numeric: tabular-nums; }
   .inact { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: baseline; margin-top: 4px; }
@@ -169,6 +171,11 @@
       <button type="button" data-seg="dev" aria-pressed="true">All Device</button>
       <button type="button" data-seg="al" aria-pressed="false">Above Low</button>
     </span>
+    <span class="seg" role="group" aria-label="Borongan" title="Borongan = one POS / order number with more than 3 units of the same model type">
+      <button type="button" data-bor="all" aria-pressed="true">All sales</button>
+      <button type="button" data-bor="excl" aria-pressed="false">Excl. Borongan</button>
+      <button type="button" data-bor="only" aria-pressed="false">Borongan only</button>
+    </span>
     <label><input type="checkbox" id="fTargetOnly" checked> Only stores with a target</label>
     <span class="spacer"></span>
     <input type="search" id="fSearch" placeholder="Search store or site code…" aria-label="Search store">
@@ -208,6 +215,18 @@
     </div>
   </section>
 
+  <section class="card table-card" id="borongan">
+    <div class="table-head">
+      <div>
+        <h2>Borongan orders</h2>
+        <p class="note" style="margin:0" id="borNote"></p>
+      </div>
+    </div>
+    <div class="tscroll" style="max-height:420px">
+      <table id="borTable"><thead></thead><tbody></tbody><tfoot></tfoot></table>
+    </div>
+  </section>
+
   <section class="card">
     <h2>Model mix · MTD sales vs stock</h2>
     <p class="note">Units, for the stores in the current filter. DC stock = Roxy, Cempaka Mas, Srengseng DCs.</p>
@@ -228,19 +247,31 @@ const AL_SEGS = new Set(["02", "03", "04"]);
 const SEG_NAMES = { "01": "Low", "02": "Mid", "03": "High", "04": "Flagship", "00": "Unmapped" };
 const nf = new Intl.NumberFormat("id-ID");
 const fmt = (n) => nf.format(Math.round(n));
+const nf1 = new Intl.NumberFormat("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const pct = (n) => (n == null || !isFinite(n)) ? "—" : Math.round(n * 100) + "%";
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const parseDate = (s) => new Date(s + "T00:00:00");
 const dayMs = 86400000;
 
-let D, STORES, state = { tsh: "", store: "", inactive: "", seg: "dev", targetOnly: true, q: "", sortKey: "gapPace", sortDir: "asc" };
+let D, STORES, state = { tsh: "", store: "", inactive: "", bor: "all", seg: "dev", targetOnly: true, q: "", sortKey: "gapPace", sortDir: "asc" };
 
 fetch("data/sbd.json", { cache: "no-store" })
   .then((r) => r.json())
   .then((json) => { D = prep(json); initFilters(); render(); })
   .catch((e) => { document.getElementById("sub").textContent = "Could not load data/sbd.json - " + e; });
 
-function prep(j) {
+// Borongan switch: rebuild every number from the raw extract with the chosen filter
+function setBor(mode) {
+  state.bor = mode;
+  document.querySelectorAll("[data-bor]").forEach((x) => x.setAttribute("aria-pressed", x.dataset.bor === mode));
+  D = prep(D.j, mode); render();
+}
+function keepBor(b, mode) {
+  const isB = b === "1";
+  return mode === "excl" ? !isB : mode === "only" ? isB : true;
+}
+
+function prep(j, mode = "all") {
   const start = parseDate(j.period_start), end = parseDate(j.period_end), asof = parseDate(j.sales_asof);
   const totalDays = Math.round((end - start) / dayMs) + 1;
   const doneDays = Math.max(0, Math.min(totalDays, Math.round((asof - start) / dayMs) + 1));
@@ -251,25 +282,34 @@ function prep(j) {
   split(j.targets).forEach(([site, name, tsh, lob, td, tal]) => {
     stores.set(site, { site, name, tsh: tsh || "(DC)", isDC: site.startsWith("BG"), tDev: +td, tAl: +tal,
       mtd: { dev: 0, al: 0, val: 0 }, done: { dev: 0, al: 0 }, today: { dev: 0, al: 0 },
-      oct: { dev: 0, al: 0 }, ly: { dev: 0, al: 0 }, stock: { dev: 0, al: 0 }, dc: { dev: 0, al: 0 } });
+      oct: { dev: 0, al: 0 }, ly: { dev: 0, al: 0 }, stock: { dev: 0, al: 0 }, dc: { dev: 0, al: 0 },
+      bor: { dev: 0, al: 0 }, all: { dev: 0, al: 0 } });
   });
   const daily = [];   // [dayIndex, site, seg, model, qty]
-  split(j.sales).forEach(([d, site, seg, model, q, a]) => {
+  const borAll = (s, seg, q, b) => {     // Borongan & total MTD, independent of the switch
+    s.all.dev += q; if (AL_SEGS.has(seg)) s.all.al += q;
+    if (b === "1") { s.bor.dev += q; if (AL_SEGS.has(seg)) s.bor.al += q; }
+  };
+  split(j.sales).forEach(([d, site, seg, model, q, a, b]) => {
     const s = stores.get(site); if (!s) return;
+    borAll(s, seg, +q, b);
+    if (!keepBor(b, mode)) return;
     const di = Math.round((parseDate(d.slice(0,4)+"-"+d.slice(4,6)+"-"+d.slice(6)) - start) / dayMs);
     q = +q; s.mtd.dev += q; s.done.dev += q; s.mtd.val += +a;
     if (AL_SEGS.has(seg)) { s.mtd.al += q; s.done.al += q; }
     daily.push({ di, site, seg, model, q });
   });
   const todayRows = [];
-  split(j.today).forEach(([d, site, seg, model, q, a]) => {
+  split(j.today).forEach(([d, site, seg, model, q, a, b]) => {
     const s = stores.get(site); if (!s) return;
+    borAll(s, seg, +q, b);
+    if (!keepBor(b, mode)) return;
     q = +q; s.mtd.dev += q; s.today.dev += q; s.mtd.val += +a;
     if (AL_SEGS.has(seg)) { s.mtd.al += q; s.today.al += q; }
     todayRows.push({ site, seg, model, q });
   });
-  const addBase = (arr, key) => split(arr).forEach(([site, seg, q]) => {
-    const s = stores.get(site); if (!s) return;
+  const addBase = (arr, key) => split(arr).forEach(([site, seg, q, a, b]) => {
+    const s = stores.get(site); if (!s || !keepBor(b, mode)) return;
     s[key].dev += +q; if (AL_SEGS.has(seg)) s[key].al += +q;
   });
   addBase(j.prev_month, "oct"); addBase(j.prev_year, "ly");
@@ -281,7 +321,9 @@ function prep(j) {
     stockRows.push({ line, site, seg, model, q });
   });
   STORES = [...stores.values()];
-  return { j, start, end, totalDays, doneDays, remDays, daily, todayRows, stockRows };
+  const borOrders = split(j.borongan || []).map(([d, site, pos, model, seg, q, a]) =>
+    ({ d: d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6), site, pos, model, seg, q: +q, a: +a }));
+  return { j, start, end, totalDays, doneDays, remDays, daily, todayRows, stockRows, borOrders };
 }
 
 function initFilters() {
@@ -295,11 +337,12 @@ function initFilters() {
     const tr = e.target.closest("tr[data-site]"); if (tr) setStore(state.store === tr.dataset.site ? "" : tr.dataset.site);
   };
   fillStores();
-  document.querySelectorAll(".seg button").forEach((b) => b.onclick = () => {
+  document.querySelectorAll("[data-seg]").forEach((b) => b.onclick = () => {
     state.seg = b.dataset.seg;
-    document.querySelectorAll(".seg button").forEach((x) => x.setAttribute("aria-pressed", x === b));
+    document.querySelectorAll("[data-seg]").forEach((x) => x.setAttribute("aria-pressed", x === b));
     render();
   });
+  document.querySelectorAll("[data-bor]").forEach((b) => b.onclick = () => setBor(b.dataset.bor));
   document.getElementById("fTargetOnly").onchange = (e) => { state.targetOnly = e.target.checked; fillStores(); render(); };
   document.getElementById("fSearch").oninput = (e) => { state.q = e.target.value.trim().toLowerCase(); render(); };
 
@@ -377,8 +420,9 @@ function metrics(s) {
   const pace = paceOf(actual, target);
   const gap = Math.max(0, target - actual);
   const estQty = estOf(actual, done);
+  const bor = s.bor[k], borShare = s.all[k] ? s.bor[k] / s.all[k] : null;
   const estAchv = target && estQty != null ? estQty / target : null;
-  return { target, actual, done, today: s.today[k], expected, achv, pace, gap, estQty, estAchv, need: gap / D.remDays,
+  return { target, actual, done, today: s.today[k], expected, achv, pace, gap, estQty, estAchv, bor, borShare, need: gap / D.remDays,
            oct: s.oct[k], ly: s.ly[k], stock: s.stock[k], gapPace: target ? (actual - target * (D.doneDays + 1) / D.totalDays) : 1e9 };
 }
 
@@ -404,9 +448,35 @@ function statusOf(pace, hasTarget) {
 }
 const statusHtml = ([cls, label]) => `<span class="status ${cls}"><i class="dot"></i>${label}</span>`;
 
+function renderBorongan(rows) {
+  const ids = new Set(rows.map((s) => s.site)), seg = state.seg;
+  const name = (site) => ((STORES.find((s) => s.site === site) || {}).name || "").replace(/^ERAFONE\s+/, "");
+  const tsh = (site) => ((STORES.find((s) => s.site === site) || {}).tsh || "").split(" ").slice(0, 2).join(" ");
+  const list = D.borOrders.filter((o) => ids.has(o.site) && (seg === "dev" || AL_SEGS.has(o.seg)));
+  const units = list.reduce((a, o) => a + o.q, 0), val = list.reduce((a, o) => a + o.a, 0);
+  const allUnits = rows.reduce((a, s) => a + s.all[seg], 0);
+  const stores = new Set(list.map((o) => o.site)).size;
+  document.getElementById("borNote").innerHTML =
+    `One POS / order number with <b>more than 3 units of the same model type</b>. ${fmt(list.length)} orders · ${fmt(units)} units` +
+    ` (${allUnits ? pct(units / allUnits) : "—"} of ${state.seg === "dev" ? "Device" : "Above Low"} sales) · ${stores} store${stores === 1 ? "" : "s"} · Rp ${nf.format(Math.round(val))} jt. Click a row to filter the page to that store.`;
+  const t = document.getElementById("borTable");
+  t.tHead.innerHTML = `<tr><th class="l">Date</th><th class="l">Store</th><th class="l">TSH</th><th class="l">POS / order no.</th><th class="l">Model</th><th class="l">Price band</th><th>Units</th><th>Value (Rp jt)</th></tr>`;
+  const fmtD = (d) => parseDate(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  t.tBodies[0].innerHTML = list.map((o) => `<tr data-site="${o.site}" class="${state.store === o.site ? "sel" : ""}">
+      <td class="l">${fmtD(o.d)}${o.d === D.j.today_date ? " (today)" : ""}</td>
+      <td class="l store" title="${esc(name(o.site))}"><span class="site">${o.site}</span>${esc(name(o.site))}</td>
+      <td class="l tsh">${esc(tsh(o.site))}</td>
+      <td class="l">${esc(o.pos)}</td><td class="l">${esc(o.model)}</td><td class="l">${SEG_NAMES[o.seg] || ""}</td>
+      <td>${fmt(o.q)}</td><td>${nf1.format(o.a)}</td></tr>`).join("")
+    || `<tr><td class="l" colspan="8">No Borongan orders for this filter.</td></tr>`;
+  t.tFoot.innerHTML = list.length ? `<tr><td class="l" colspan="6">Total · ${list.length} orders</td><td>${fmt(units)}</td><td>${nf1.format(val)}</td></tr>` : "";
+  t.tBodies[0].onclick = (e) => { const tr = e.target.closest("tr[data-site]"); if (tr) setStore(state.store === tr.dataset.site ? "" : tr.dataset.site); };
+}
+
 function render() {
   const rows = filtered();
   renderKpis(state.inactive ? baseFiltered() : rows);
+  renderBorongan(rows);
   document.getElementById("paceNote").textContent = `${state.seg === "dev" ? "Device" : "Above Low"} units · ${rows.length} store${rows.length === 1 ? "" : "s"} in filter · completed days only, today shown as a separate point`;
   const bn = document.getElementById("inactBanner");
   bn.style.display = state.inactive ? "flex" : "none";
@@ -418,7 +488,8 @@ function renderKpis(rows) {
   const sum = (f) => rows.reduce((a, s) => a + f(s), 0);
   const seg = state.seg, segLabel = seg === "dev" ? "Device" : "Above Low";
   const tgtStores = rows.filter((s) => (seg === "dev" ? s.tDev : s.tAl) > 0);
-  const kd = (k) => ({ t: sum((s) => k === "dev" ? s.tDev : s.tAl), a: sum((s) => s.mtd[k]), d: sum((s) => s.done[k]) });
+  const kd = (k) => ({ t: sum((s) => k === "dev" ? s.tDev : s.tAl), a: sum((s) => s.mtd[k]), d: sum((s) => s.done[k]),
+                       b: sum((s) => s.bor[k]), all: sum((s) => s.all[k]) });
   const dev = kd("dev"), al = kd("al");
   const expFrac = D.doneDays / D.totalDays;
   const card = (label, x) => {
@@ -428,7 +499,8 @@ function renderKpis(rows) {
       <div class="value">${pct(achv)} <small>${fmt(x.a)} / ${fmt(x.t)}</small></div>
       <div class="bar" title="Tick = expected by end of day ${D.doneDays}"><i style="width:${Math.min(100, (achv || 0) * 100)}%"></i><b style="left:${expFrac * 100}%"></b></div>
       <div class="foot">${statusHtml(statusOf(pace, x.t > 0))} · expected ${pct(expFrac)} by now</div>
-      <div class="est" title="${EST_TIP}">Est. month-end <b>${x.t && est != null ? pct(est / x.t) : "—"}</b> · ${est != null ? fmt(est) : "—"} units</div></div>`;
+      <div class="est" title="${EST_TIP}">Est. month-end <b>${x.t && est != null ? pct(est / x.t) : "—"}</b> · ${est != null ? fmt(est) : "—"} units</div>
+      <div class="est"><a href="#borongan" class="borlink" title="POS / order numbers with more than 3 units of the same model">Borongan <b>${fmt(x.b)}</b> units · ${x.all ? pct(x.b / x.all) : "—"} of all sales</a></div></div>`;
   };
   const a = kd(seg);
   const runRate = D.doneDays ? a.d / D.doneDays : 0;
@@ -573,10 +645,10 @@ function renderTsh() {
 function renderTable(rows) {
   const t = document.getElementById("storeTable"), segLabel = state.seg === "dev" ? "Device" : "Above Low";
   const cols = [
-    ["name", "Store", "l"], ["tsh", "TSH", "l"], ["target", "Target"], ["actual", "MTD"], ["today", "Today"],
+    ["name", "Store", "l"], ["tsh", "TSH", "l"], ["target", "Target"], ["actual", "MTD"], ["today", "Today"], ["bor", "Borongan"],
     ["achv", "Achv"], ["estAchv", "Est. Achv"], ["gapPace", "Status"], ["gap", "Gap"], ["need", "Need / day"],
     ["oct", "Oct-26"], ["ly", "Nov-25"], ["stock", "Stock"], ["cover", "Stock vs gap"]];
-  t.tHead.innerHTML = `<tr>${cols.map(([k, l, c], i) => `<th data-k="${k}" class="${c || ""}" ${state.sortKey === k ? `aria-sort="${state.sortDir === "asc" ? "ascending" : "descending"}"` : ""}>${i === 2 ? `<span class="grp">${segLabel}</span>` : i === 10 ? `<span class="grp">Reference (full month)</span>` : i === 12 ? `<span class="grp">Store stock ${D.j.stock_date.slice(8)}/${D.j.stock_date.slice(5,7)}</span>` : `<span class="grp">&nbsp;</span>`}${l}</th>`).join("")}</tr>`;
+  t.tHead.innerHTML = `<tr>${cols.map(([k, l, c], i) => `<th data-k="${k}" class="${c || ""}" ${state.sortKey === k ? `aria-sort="${state.sortDir === "asc" ? "ascending" : "descending"}"` : ""}>${i === 2 ? `<span class="grp">${segLabel}</span>` : i === 11 ? `<span class="grp">Reference (full month)</span>` : i === 13 ? `<span class="grp">Store stock ${D.j.stock_date.slice(8)}/${D.j.stock_date.slice(5,7)}</span>` : `<span class="grp">&nbsp;</span>`}${l}</th>`).join("")}</tr>`;
   const data = rows.map((s) => ({ s, m: metrics(s) }));
   const key = state.sortKey, dir = state.sortDir === "asc" ? 1 : -1;
   const val = (o) => key === "name" ? o.s.name : key === "tsh" ? o.s.tsh : key === "cover" ? (o.m.gap ? o.m.stock / o.m.gap : 1e9) : (o.m[key] ?? -1);
@@ -594,6 +666,7 @@ function renderTable(rows) {
       <td>${has ? fmt(m.target) : `<span class="muted">0</span>`}</td>
       <td>${fmt(m.actual)}</td>
       <td class="${m.today ? "" : "muted"}">${fmt(m.today)}</td>
+      <td class="${m.bor ? "" : "muted"}" title="Borongan units MTD (all sales): ${pct(m.borShare)} of this store's sales">${fmt(m.bor)}</td>
       <td>${has ? `<span class="mini"><i style="width:${Math.min(100, m.achv * 100)}%"></i><b style="left:${expFrac * 100}%"></b></span>${pct(m.achv)}` : `<span class="muted">—</span>`}</td>
       <td title="Month-end estimate ${m.estQty != null ? fmt(m.estQty) : "—"} units">${has ? pct(m.estAchv) : `<span class="muted">—</span>`}</td>
       <td>${statusHtml(st)}</td>
@@ -603,11 +676,11 @@ function renderTable(rows) {
       <td>${fmt(m.ly)}</td>
       <td>${fmt(m.stock)}</td>
       <td>${cover}</td></tr>`;
-  }).join("") || `<tr><td class="l" colspan="14">No stores match the filter.</td></tr>`;
-  const tot = data.reduce((a, { m }) => { ["target", "actual", "today", "gap", "oct", "ly", "stock"].forEach((k) => a[k] += m[k]); a.done += m.done; return a; },
-    { target: 0, actual: 0, today: 0, gap: 0, oct: 0, ly: 0, stock: 0, done: 0 });
+  }).join("") || `<tr><td class="l" colspan="15">No stores match the filter.</td></tr>`;
+  const tot = data.reduce((a, { m }) => { ["target", "actual", "today", "bor", "gap", "oct", "ly", "stock"].forEach((k) => a[k] += m[k]); a.done += m.done; return a; },
+    { target: 0, actual: 0, today: 0, bor: 0, gap: 0, oct: 0, ly: 0, stock: 0, done: 0 });
   const tp = paceOf(tot.actual, tot.target);
-  t.tFoot.innerHTML = `<tr><td class="l">Total · ${data.length} stores</td><td></td><td>${fmt(tot.target)}</td><td>${fmt(tot.actual)}</td><td>${fmt(tot.today)}</td>
+  t.tFoot.innerHTML = `<tr><td class="l">Total · ${data.length} stores</td><td></td><td>${fmt(tot.target)}</td><td>${fmt(tot.actual)}</td><td>${fmt(tot.today)}</td><td>${fmt(tot.bor)}</td>
     <td>${pct(tot.target ? tot.actual / tot.target : null)}</td><td>${tot.target ? pct(estOf(tot.actual, tot.done) / tot.target) : "—"}</td><td>${statusHtml(statusOf(tp, tot.target > 0))}</td><td>${fmt(tot.gap)}</td>
     <td>${(tot.gap / D.remDays).toFixed(1)}</td><td>${fmt(tot.oct)}</td><td>${fmt(tot.ly)}</td><td>${fmt(tot.stock)}</td><td></td></tr>`;
 }
@@ -658,7 +731,7 @@ function shotName() {
   const now = new Date(), p = (n) => String(n).padStart(2, "0");
   const scope = state.store ? state.store + "_" + (STORES.find((s) => s.site === state.store) || {}).name
               : state.tsh ? "TSH_" + state.tsh : "All";
-  return `SBD_VIVO_${scope}_${state.seg === "dev" ? "Device" : "AboveLow"}_${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}-${p(now.getHours())}${p(now.getMinutes())}.png`
+  return `SBD_VIVO_${scope}_${state.seg === "dev" ? "Device" : "AboveLow"}${state.bor === "excl" ? "_ExclBorongan" : state.bor === "only" ? "_BoronganOnly" : ""}_${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}-${p(now.getHours())}${p(now.getMinutes())}.png`
     .replace(/[^\w.\-]+/g, "_");
 }
 function cloneWithStyles(src) {
