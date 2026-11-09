@@ -19,14 +19,18 @@ svs AS (
 svs_t AS (SELECT * FROM svs WHERE site IN (SELECT site FROM tgt)),
 
 -- SALES source: sales_all_retail, segment = price_category_GFK (Above Low = MID/HIGH/FLAGSHIP)
-sar AS (
-  SELECT order_date AS d, site_code AS site,
+sar0 AS (
+  SELECT order_date AS d, site_code AS site, pos_number AS pos,
          IFNULL(NULLIF(Model_Type, ''), 'OTHER') AS model,
          IFNULL(NULLIF(LEFT(price_category_GFK, 2), ''), '00') AS seg,
          quantity AS q, total_nett_amount_with_tax AS a
   FROM `e-smart-433113.region_data.sales_all_retail`
   WHERE brandname = 'VIVO' AND Product_Category = 'Device'
     AND site_code IN (SELECT site FROM tgt)
+),
+-- BORONGAN = one POS number with more than 3 units of the same model type
+sar AS (
+  SELECT *, IF(SUM(q) OVER (PARTITION BY site, pos, model) > 3, 1, 0) AS b FROM sar0
 ),
 
 asof AS (SELECT MAX(d) AS sales_asof FROM sar),
@@ -39,18 +43,18 @@ stores AS (
 
 -- current period, daily x site x segment x model
 cur AS (
-  SELECT d, site, seg, model, SUM(q) q, SUM(a) a
+  SELECT d, site, seg, model, b, SUM(q) q, SUM(a) a
   FROM sar, p WHERE d BETWEEN p.s AND p.e
   GROUP BY ALL
 ),
 -- baselines: previous month and same month last year (site x segment)
 prev_m AS (
-  SELECT site, seg, SUM(q) q, SUM(a) a
+  SELECT site, seg, b, SUM(q) q, SUM(a) a
   FROM sar, p WHERE d BETWEEN DATE_SUB(p.s, INTERVAL 1 MONTH) AND DATE_SUB(p.s, INTERVAL 1 DAY)
   GROUP BY ALL
 ),
 prev_y AS (
-  SELECT site, seg, SUM(q) q, SUM(a) a
+  SELECT site, seg, b, SUM(q) q, SUM(a) a
   FROM sar, p WHERE d BETWEEN DATE_SUB(p.s, INTERVAL 1 YEAR) AND DATE_SUB(p.e, INTERVAL 1 YEAR)
   GROUP BY ALL
 ),
@@ -62,8 +66,8 @@ stk AS (
 ),
 
 -- today intraday (POS): GFK band from nett unit price incl. tax (same cut-offs as price_category_GFK)
-today AS (
-  SELECT PARSE_DATE('%Y/%m/%d', sd.`Date`) AS d, sd.`Site Code` AS site,
+today0 AS (
+  SELECT PARSE_DATE('%Y/%m/%d', sd.`Date`) AS d, sd.`Site Code` AS site, sd.`Order Number` AS pos,
          IFNULL(sd.model_type, 'OTHER') AS model,
          CASE WHEN SAFE_DIVIDE(sd.`Total Amount`, sd.Quantity) <= 3000000 THEN '01'
               WHEN SAFE_DIVIDE(sd.`Total Amount`, sd.Quantity) <= 5000000 THEN '02'
@@ -76,7 +80,17 @@ today AS (
     AND sd.`Site Code` IN (SELECT site FROM tgt)
   GROUP BY ALL
 ),
+today AS (
+  SELECT *, IF(SUM(q) OVER (PARTITION BY site, pos, model) > 3, 1, 0) AS b FROM today0
+),
 today_f AS (SELECT t.* FROM today t, asof, p WHERE t.d > asof.sales_asof AND t.d BETWEEN p.s AND p.e),
+bor AS (
+  SELECT d, site, pos, model, MAX(seg) seg, SUM(q) q, SUM(a) a FROM (
+    SELECT d, site, pos, model, seg, q, a FROM sar, p WHERE b = 1 AND d BETWEEN p.s AND p.e
+    UNION ALL
+    SELECT d, site, pos, model, seg, q, a FROM today_f WHERE b = 1)
+  GROUP BY d, site, pos, model
+),
 -- how far sales_daily is loaded (ALL brands/stores): if it already holds today, stores with no VIVO rows are inactive today
 sd_meta AS (
   SELECT d AS sd_date, last_t AS sd_last_time FROM (
@@ -101,14 +115,17 @@ SELECT TO_JSON_STRING(STRUCT(
   -- site|store|tsh|lob|target_device|target_above_low
   ARRAY(SELECT CONCAT(t.site, '|', IFNULL(s.s.store_name, ''), '|', IFNULL(s.s.tsh, ''), '|', IFNULL(s.s.lob, ''), '|', CAST(t.td AS STRING), '|', CAST(t.tal AS STRING))
         FROM tgt t LEFT JOIN stores s USING (site) ORDER BY t.site) AS targets,
-  -- yyyymmdd|site|seg|model|qty|amt_mio
-  ARRAY(SELECT CONCAT(FORMAT_DATE('%Y%m%d', d), '|', site, '|', seg, '|', model, '|', CAST(q AS STRING), '|', CAST(ROUND(a / 1e6, 1) AS STRING))
+  -- yyyymmdd|site|seg|model|qty|amt_mio|borongan(0/1)
+  ARRAY(SELECT CONCAT(FORMAT_DATE('%Y%m%d', d), '|', site, '|', seg, '|', model, '|', CAST(q AS STRING), '|', CAST(ROUND(a / 1e6, 1) AS STRING), '|', CAST(b AS STRING))
         FROM cur ORDER BY d, site) AS sales,
-  ARRAY(SELECT CONCAT(FORMAT_DATE('%Y%m%d', d), '|', site, '|', seg, '|', model, '|', CAST(q AS STRING), '|', CAST(ROUND(a / 1e6, 1) AS STRING))
-        FROM today_f ORDER BY site) AS today,
-  -- site|seg|qty|amt_mio
-  ARRAY(SELECT CONCAT(site, '|', seg, '|', CAST(q AS STRING), '|', CAST(ROUND(a / 1e6, 1) AS STRING)) FROM prev_m ORDER BY site) AS prev_month,
-  ARRAY(SELECT CONCAT(site, '|', seg, '|', CAST(q AS STRING), '|', CAST(ROUND(a / 1e6, 1) AS STRING)) FROM prev_y ORDER BY site) AS prev_year,
+  ARRAY(SELECT CONCAT(FORMAT_DATE('%Y%m%d', d), '|', site, '|', seg, '|', model, '|', CAST(SUM(q) AS STRING), '|', CAST(ROUND(SUM(a) / 1e6, 1) AS STRING), '|', CAST(b AS STRING))
+        FROM today_f GROUP BY d, site, seg, model, b ORDER BY site) AS today,
+  -- site|seg|qty|amt_mio|borongan(0/1)
+  ARRAY(SELECT CONCAT(site, '|', seg, '|', CAST(q AS STRING), '|', CAST(ROUND(a / 1e6, 1) AS STRING), '|', CAST(b AS STRING)) FROM prev_m ORDER BY site) AS prev_month,
+  ARRAY(SELECT CONCAT(site, '|', seg, '|', CAST(q AS STRING), '|', CAST(ROUND(a / 1e6, 1) AS STRING), '|', CAST(b AS STRING)) FROM prev_y ORDER BY site) AS prev_year,
+  -- Borongan orders: yyyymmdd|site|pos_number|model|seg|qty|amt_mio
+  ARRAY(SELECT CONCAT(FORMAT_DATE('%Y%m%d', d), '|', site, '|', pos, '|', model, '|', seg, '|', CAST(q AS STRING), '|', CAST(ROUND(a / 1e6, 1) AS STRING))
+        FROM bor ORDER BY d DESC, q DESC) AS borongan,
   -- line|site|seg|model|qty
   ARRAY(SELECT CONCAT(line, '|', site, '|', seg, '|', model, '|', CAST(q AS STRING)) FROM stk WHERE q <> 0 ORDER BY line, site) AS stock
 )) AS j
