@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>VIVO Super Brand Day · Jakarta</title>
+<title>VIVO Super Brand Day</title>
 <style>
   :root {
     color-scheme: light;
@@ -67,6 +67,8 @@
                 padding: 5px 12px; cursor: pointer; }
   .seg button[aria-pressed="true"] { background: var(--series-1); color: #fff; }
   .spacer { flex: 1; }
+  .evsw { margin-top: 8px; }
+  .evsw button { font-size: 14px; padding: 6px 14px; }
   .borlink { color: inherit; text-decoration: none; border-bottom: 1px dashed var(--text-muted); }
   .borlink:hover { color: var(--series-1); }
   .est { margin-top: 6px; font-size: 12px; color: var(--text-secondary); }
@@ -88,7 +90,7 @@
   tbody tr { cursor: pointer; }
   tbody tr.sel { background: var(--series-1-soft); }
 
-  .kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
   .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
   .kpi .label { font-size: 12px; color: var(--text-secondary); }
   .kpi .value { font-size: 28px; font-weight: 650; letter-spacing: -0.02em; margin-top: 2px; font-variant-numeric: tabular-nums; }
@@ -147,9 +149,7 @@
     .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .grid2 { grid-template-columns: 1fr; }
   }
-  @media (min-width: 1001px) and (max-width: 1250px) {
-    .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  }
+
 </style>
 </head>
 <body>
@@ -157,8 +157,9 @@
 <div class="wrap" id="shotArea">
   <header>
     <div>
-      <h1>VIVO Super Brand Day · Jakarta</h1>
+      <h1 id="title">VIVO Super Brand Day</h1>
       <div class="sub" id="sub">Loading…</div>
+      <span class="seg evsw" role="group" aria-label="Area" id="evSwitch" data-noshot></span>
     </div>
     <div class="meta" id="meta"></div>
   </header>
@@ -167,10 +168,7 @@
     <label>TSH <select id="fTsh"><option value="">All TSH</option></select></label>
     <label>Store <select id="fStore" style="max-width:280px"><option value="">All stores</option></select></label>
     <button type="button" id="fClear" class="clear" hidden>✕ Clear store</button>
-    <span class="seg" role="group" aria-label="Segment">
-      <button type="button" data-seg="dev" aria-pressed="true">All Device</button>
-      <button type="button" data-seg="al" aria-pressed="false">Above Low</button>
-    </span>
+    <span class="seg" role="group" aria-label="Segment" id="segBtns"></span>
     <span class="seg" role="group" aria-label="Borongan" title="Borongan = one POS / order number with more than 3 units of the same model type">
       <button type="button" data-bor="all" aria-pressed="true">All sales</button>
       <button type="button" data-bor="excl" aria-pressed="false">Excl. Borongan</button>
@@ -196,7 +194,7 @@
     </div>
     <div class="card">
       <h2>Achievement by TSH</h2>
-      <p class="note">Bar = actual MTD (incl. today) · black tick = target pace today</p>
+      <p class="note">Bar = actual to date (incl. today) · black tick = target pace today</p>
       <div class="chart-box" id="tshBox"><svg id="tshChart" viewBox="0 0 420 260" role="img" aria-label="Achievement by TSH"></svg><div class="tip"></div></div>
     </div>
   </section>
@@ -205,7 +203,7 @@
     <div class="table-head">
       <div>
         <h2>Store achievement</h2>
-        <p class="note" style="margin:0">Status compares MTD (incl. today) with the target pro-rata for completed days. "Est. Achv" = (MTD incl. today + completed-day average × days left after today) ÷ target. Click a column to sort, or a store row to filter the whole page to that store. "Need / day" = remaining target ÷ remaining days (incl. today). Stock flag compares store stock with the remaining gap.</p>
+        <p class="note" style="margin:0">Status compares actual to date (incl. today) with the target pro-rata for completed days. "Est. Achv" = (actual incl. today + completed-day average × days left after today) ÷ target. Click a column to sort, or a store row to filter the whole page to that store. "Need / day" = remaining target ÷ remaining days (incl. today). Stock flag compares store stock with the remaining gap.</p>
       </div>
     </div>
     <div class="tscroll">
@@ -228,14 +226,14 @@
   </section>
 
   <section class="card">
-    <h2>Model mix · MTD sales vs stock</h2>
-    <p class="note">Units, for the stores in the current filter. DC stock = Roxy, Cempaka Mas, Srengseng DCs.</p>
+    <h2>Model mix · sales to date vs stock</h2>
+    <p class="note">Units, for the stores in the current filter. DC stock = DCs in the area's target list (if any).</p>
     <div class="chart-box" id="modelBox"><svg id="modelChart" viewBox="0 0 1000 300" role="img" aria-label="Model mix"></svg><div class="tip"></div></div>
   </section>
 
   <footer>
-    <p>Source: BigQuery e-smart-433113 · sales: region_data.sales_all_retail (to <span class="f-asof"></span>) + region_data.sales_daily (today, PAID POS) · stock: region_data.sales_vs_stock (<span class="f-stock"></span>) · targets: master_data.target_sbd_vivo_jakarta.</p>
-    <p>Target Device = all VIVO Device qty sold per store, 1–30 Nov. Target Above Low = VIVO Device qty with price_category_GFK not LOW (MID + HIGH + FLAGSHIP). Today's POS orders get the same GFK bands from nett unit price incl. tax (≤3 jt Low, ≤5 jt Mid, ≤9 jt High, above Flagship). Stock has no selling price, so stock is split by sales_vs_stock price_segment. Pace uses calendar days.</p>
+    <p id="footSrc"></p>
+    <p id="footDef"></p>
   </footer>
 </div>
 
@@ -244,6 +242,21 @@
 const GITHUB_REPO = "rcm5DaMon/sbd_vivo";   // e.g. "andi-r5/sbd-vivo-dashboard"
 
 const AL_SEGS = new Set(["02", "03", "04"]);
+// ===== Areas: add one here + in scripts/refresh.py to get another SBD area =====
+const EVENTS = {
+  jakarta: { name: "Jakarta", files: ["data/jakarta.json", "data/sbd.json"], segs: ["dev", "al"],
+             table: "master_data.target_sbd_vivo_jakarta", prev: "Oct-26", ly: "Nov-25" },
+  tangban: { name: "Tangerang - Banten", files: ["data/tangban.json"], segs: ["dev", "al", "v80"],
+             table: "master_data.target_sbd_vivo_tangban" },
+};
+const SEGDEF = { dev: { btn: "All Device", label: "Device" }, al: { btn: "Above Low", label: "Above Low" },
+                 v80: { btn: "V80 Lite", label: "V80 Lite" } };
+const SEGKEYS = ["dev", "al", "v80"];
+// does a sales/stock row (price band seg, V80 Lite flag x) count for segment k?
+const inSeg = (k, seg, x) => k === "dev" ? true : k === "al" ? AL_SEGS.has(seg) : k === "v80" ? x === "1" : false;
+const z = () => ({ dev: 0, al: 0, v80: 0 });
+const addTo = (obj, seg, x, q) => SEGKEYS.forEach((k) => { if (inSeg(k, seg, x)) obj[k] += q; });
+let EVKEY = "jakarta", EV = EVENTS.jakarta;
 const SEG_NAMES = { "01": "Low", "02": "Mid", "03": "High", "04": "Flagship", "00": "Unmapped" };
 const nf = new Intl.NumberFormat("id-ID");
 const fmt = (n) => nf.format(Math.round(n));
@@ -255,10 +268,33 @@ const dayMs = 86400000;
 
 let D, STORES, state = { tsh: "", store: "", inactive: "", bor: "all", seg: "dev", targetOnly: true, q: "", sortKey: "gapPace", sortDir: "asc" };
 
-fetch("data/sbd.json", { cache: "no-store" })
-  .then((r) => r.json())
-  .then((json) => { D = prep(json); initFilters(); render(); })
-  .catch((e) => { document.getElementById("sub").textContent = "Could not load data/sbd.json - " + e; });
+async function fetchFirst(files) {
+  for (const f of files) {
+    try { const r = await fetch(f, { cache: "no-store" }); if (r.ok) return await r.json(); } catch (e) { /* try next */ }
+  }
+  throw new Error("no data file found (" + files.join(", ") + ") - run Refresh data once");
+}
+async function loadEvent(key) {
+  EVKEY = EVENTS[key] ? key : "jakarta"; EV = EVENTS[EVKEY];
+  if (location.hash.slice(1) !== EVKEY) history.replaceState(null, "", "#" + EVKEY);
+  document.querySelectorAll("[data-ev]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.ev === EVKEY));
+  document.getElementById("title").textContent = "VIVO Super Brand Day · " + EV.name;
+  document.title = "SBD VIVO · " + EV.name;
+  document.getElementById("sub").textContent = "Loading…";
+  try {
+    const json = await fetchFirst(EV.files);
+    Object.assign(state, { tsh: "", store: "", inactive: "", q: "" });
+    if (!EV.segs.includes(state.seg)) state.seg = "dev";
+    document.getElementById("fSearch").value = "";
+    D = prep(json, state.bor); setupEvent(); render();
+  } catch (e) { document.getElementById("sub").textContent = "Could not load data for " + EV.name + ": " + e.message; }
+}
+document.getElementById("evSwitch").innerHTML = Object.entries(EVENTS)
+  .map(([k, e]) => `<button type="button" data-ev="${k}" aria-pressed="false">${e.name}</button>`).join("");
+document.querySelectorAll("[data-ev]").forEach((b) => b.onclick = () => { if (b.dataset.ev !== EVKEY) loadEvent(b.dataset.ev); });
+window.addEventListener("hashchange", () => { const k = location.hash.slice(1); if (EVENTS[k] && k !== EVKEY) loadEvent(k); });
+initOnce();
+loadEvent(location.hash.slice(1) || "jakarta");
 
 // Borongan switch: rebuild every number from the raw extract with the chosen filter
 function setBor(mode) {
@@ -279,73 +315,81 @@ function prep(j, mode = "all") {
   const split = (a) => a.map((r) => r.split("|"));
 
   const stores = new Map();
-  split(j.targets).forEach(([site, name, tsh, lob, td, tal]) => {
-    stores.set(site, { site, name, tsh: tsh || "(DC)", isDC: site.startsWith("BG"), tDev: +td, tAl: +tal,
-      mtd: { dev: 0, al: 0, val: 0 }, done: { dev: 0, al: 0 }, today: { dev: 0, al: 0 },
-      oct: { dev: 0, al: 0 }, ly: { dev: 0, al: 0 }, stock: { dev: 0, al: 0 }, dc: { dev: 0, al: 0 },
-      bor: { dev: 0, al: 0 }, all: { dev: 0, al: 0 } });
+  split(j.targets).forEach(([site, name, tsh, lob, td, tal, tv80]) => {
+    stores.set(site, { site, name, tsh: tsh || "(DC)", isDC: site.startsWith("BG"),
+      t: { dev: +td || 0, al: +tal || 0, v80: +tv80 || 0 },
+      mtd: z(), done: z(), today: z(), oct: z(), ly: z(), stock: z(), dc: z(), bor: z(), all: z() });
   });
   const daily = [];   // [dayIndex, site, seg, model, qty]
-  const borAll = (s, seg, q, b) => {     // Borongan & total MTD, independent of the switch
-    s.all.dev += q; if (AL_SEGS.has(seg)) s.all.al += q;
-    if (b === "1") { s.bor.dev += q; if (AL_SEGS.has(seg)) s.bor.al += q; }
+  const borAll = (s, seg, x, q, b) => {     // Borongan & total to date, independent of the switch
+    addTo(s.all, seg, x, q); if (b === "1") addTo(s.bor, seg, x, q);
   };
-  split(j.sales).forEach(([d, site, seg, model, q, a, b]) => {
+  split(j.sales).forEach(([d, site, seg, model, q, a, b, x]) => {
     const s = stores.get(site); if (!s) return;
-    borAll(s, seg, +q, b);
+    borAll(s, seg, x, +q, b);
     if (!keepBor(b, mode)) return;
     const di = Math.round((parseDate(d.slice(0,4)+"-"+d.slice(4,6)+"-"+d.slice(6)) - start) / dayMs);
-    q = +q; s.mtd.dev += q; s.done.dev += q; s.mtd.val += +a;
-    if (AL_SEGS.has(seg)) { s.mtd.al += q; s.done.al += q; }
-    daily.push({ di, site, seg, model, q });
+    q = +q; addTo(s.mtd, seg, x, q); addTo(s.done, seg, x, q);
+    daily.push({ di, site, seg, x, model, q });
   });
   const todayRows = [];
-  split(j.today).forEach(([d, site, seg, model, q, a, b]) => {
+  split(j.today).forEach(([d, site, seg, model, q, a, b, x]) => {
     const s = stores.get(site); if (!s) return;
-    borAll(s, seg, +q, b);
+    borAll(s, seg, x, +q, b);
     if (!keepBor(b, mode)) return;
-    q = +q; s.mtd.dev += q; s.today.dev += q; s.mtd.val += +a;
-    if (AL_SEGS.has(seg)) { s.mtd.al += q; s.today.al += q; }
-    todayRows.push({ site, seg, model, q });
+    q = +q; addTo(s.mtd, seg, x, q); addTo(s.today, seg, x, q);
+    todayRows.push({ site, seg, x, model, q });
   });
-  const addBase = (arr, key) => split(arr).forEach(([site, seg, q, a, b]) => {
+  const addBase = (arr, key) => split(arr).forEach(([site, seg, q, a, b, x]) => {
     const s = stores.get(site); if (!s || !keepBor(b, mode)) return;
-    s[key].dev += +q; if (AL_SEGS.has(seg)) s[key].al += +q;
+    addTo(s[key], seg, x, +q);
   });
   addBase(j.prev_month, "oct"); addBase(j.prev_year, "ly");
   const stockRows = [];
-  split(j.stock).forEach(([line, site, seg, model, q]) => {
+  split(j.stock).forEach(([line, site, seg, model, q, x]) => {
     const s = stores.get(site); if (!s) return;
-    q = +q; const k = line === "stock_dc" ? "dc" : "stock";
-    s[k].dev += q; if (AL_SEGS.has(seg)) s[k].al += q;
-    stockRows.push({ line, site, seg, model, q });
+    q = +q; addTo(s[line === "stock_dc" ? "dc" : "stock"], seg, x, q);
+    stockRows.push({ line, site, seg, x, model, q });
   });
   STORES = [...stores.values()];
-  const borOrders = split(j.borongan || []).map(([d, site, pos, model, seg, q, a]) =>
-    ({ d: d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6), site, pos, model, seg, q: +q, a: +a }));
+  const borOrders = split(j.borongan || []).map(([d, site, pos, model, seg, q, a, x]) =>
+    ({ d: d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6), site, pos, model, seg, x, q: +q, a: +a }));
   return { j, start, end, totalDays, doneDays, remDays, daily, todayRows, stockRows, borOrders };
 }
 
-function initFilters() {
-  const tshs = [...new Set(STORES.filter((s) => !s.isDC).map((s) => s.tsh))].sort();
+function initOnce() {
   const sel = document.getElementById("fTsh");
-  tshs.forEach((t) => sel.insertAdjacentHTML("beforeend", `<option>${esc(t)}</option>`));
   sel.onchange = () => { state.tsh = sel.value; fillStores(); render(); };
   document.getElementById("fStore").onchange = (e) => setStore(e.target.value);
   document.getElementById("fClear").onclick = () => setStore("");
   document.querySelector("#storeTable tbody").onclick = (e) => {
     const tr = e.target.closest("tr[data-site]"); if (tr) setStore(state.store === tr.dataset.site ? "" : tr.dataset.site);
   };
-  fillStores();
-  document.querySelectorAll("[data-seg]").forEach((b) => b.onclick = () => {
-    state.seg = b.dataset.seg;
-    document.querySelectorAll("[data-seg]").forEach((x) => x.setAttribute("aria-pressed", x === b));
-    render();
-  });
   document.querySelectorAll("[data-bor]").forEach((b) => b.onclick = () => setBor(b.dataset.bor));
   document.getElementById("fTargetOnly").onchange = (e) => { state.targetOnly = e.target.checked; fillStores(); render(); };
   document.getElementById("fSearch").oninput = (e) => { state.q = e.target.value.trim().toLowerCase(); render(); };
+  document.querySelectorAll("#storeTable thead").forEach((th) => th.onclick = (e) => {
+    const c = e.target.closest("th"); if (!c || !c.dataset.k) return;
+    if (state.sortKey === c.dataset.k) state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+    else { state.sortKey = c.dataset.k; state.sortDir = c.dataset.k === "name" || c.dataset.k === "tsh" ? "asc" : "desc"; }
+    renderTable(filtered());
+  });
+}
 
+// per-area setup: TSH list, segment buttons, header chips, footer
+function setupEvent() {
+  const sel = document.getElementById("fTsh");
+  const tshs = [...new Set(STORES.filter((s) => !s.isDC && s.t.dev > 0).map((s) => s.tsh))].sort();
+  sel.innerHTML = `<option value="">All TSH</option>` + tshs.map((t) => `<option>${esc(t)}</option>`).join("");
+  sel.value = "";
+  fillStores();
+  const sb = document.getElementById("segBtns");
+  sb.innerHTML = EV.segs.map((k) => `<button type="button" data-seg="${k}" aria-pressed="${state.seg === k}">${SEGDEF[k].btn}</button>`).join("");
+  sb.querySelectorAll("[data-seg]").forEach((b) => b.onclick = () => {
+    state.seg = b.dataset.seg;
+    sb.querySelectorAll("[data-seg]").forEach((x) => x.setAttribute("aria-pressed", x === b));
+    render();
+  });
   const j = D.j, m = document.getElementById("meta");
   const longDate = (s) => parseDate(s).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
   document.getElementById("sub").textContent =
@@ -362,21 +406,22 @@ function initFilters() {
   m.querySelectorAll(".btn").forEach((b) => b.setAttribute("data-noshot", ""));
   document.getElementById("shotSave").onclick = () => takeShot("save");
   document.getElementById("shotCopy").onclick = () => takeShot("copy");
-  document.querySelectorAll(".f-asof").forEach((e) => e.textContent = longDate(j.sales_asof));
-  document.querySelectorAll(".f-stock").forEach((e) => e.textContent = longDate(j.stock_date));
-
-  document.querySelectorAll("#storeTable thead").forEach((th) => th.onclick = (e) => {
-    const c = e.target.closest("th"); if (!c || !c.dataset.k) return;
-    if (state.sortKey === c.dataset.k) state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
-    else { state.sortKey = c.dataset.k; state.sortDir = c.dataset.k === "name" || c.dataset.k === "tsh" ? "asc" : "desc"; }
-    renderTable(filtered());
-  });
+  const shortDate = (s) => parseDate(s).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  document.getElementById("footSrc").textContent =
+    `Source: BigQuery e-smart-433113 · sales: region_data.sales_all_retail (to ${longDate(j.sales_asof)}) + region_data.sales_daily (today, PAID POS) · ` +
+    `stock: region_data.sales_vs_stock (${longDate(j.stock_date)}) · targets: ${EV.table}.`;
+  document.getElementById("footDef").textContent =
+    `Period ${shortDate(j.period_start)} – ${longDate(j.period_end)}. Only ket_po = "Non PO" sales count (PO taken out). ` +
+    `Target Device = all VIVO Device qty sold per store. Target Above Low = VIVO Device qty with price_category_GFK not LOW (MID + HIGH + FLAGSHIP).` +
+    (EV.segs.includes("v80") ? ` Target V80 Lite = VIVO Device qty with Model_Type_Detail "V80 LITE".` : "") +
+    ` Borongan = one POS / order number with more than 3 units of the same model type. Today's POS orders get the GFK bands from nett unit price incl. tax ` +
+    `(≤3 jt Low, ≤5 jt Mid, ≤9 jt High, above Flagship). Stock has no selling price, so stock is split by sales_vs_stock price_segment. Pace uses calendar days.`;
 }
 
 // Store dropdown: grouped by TSH, limited to the chosen TSH and the "only stores with a target" box
 function fillStores() {
   const el = document.getElementById("fStore");
-  const list = STORES.filter((s) => !s.isDC && (!state.tsh || s.tsh === state.tsh) && (!state.targetOnly || s.tDev > 0));
+  const list = STORES.filter((s) => !s.isDC && (!state.tsh || s.tsh === state.tsh) && (!state.targetOnly || s.t.dev > 0));
   if (state.store && !list.some((s) => s.site === state.store)) state.store = "";
   const groups = new Map();
   list.sort((a, b) => a.tsh.localeCompare(b.tsh) || a.name.localeCompare(b.name))
@@ -403,7 +448,7 @@ function baseFiltered() {
   if (state.store) return STORES.filter((s) => s.site === state.store);
   return STORES.filter((s) => !s.isDC
     && (!state.tsh || s.tsh === state.tsh)
-    && (!state.targetOnly || s.tDev > 0)
+    && (!state.targetOnly || s.t.dev > 0)
     && (!state.q || s.name.toLowerCase().includes(state.q) || s.site.toLowerCase().includes(state.q)));
 }
 function filtered() {
@@ -413,7 +458,7 @@ function filtered() {
 
 // per-store metrics for the active segment
 function metrics(s) {
-  const k = state.seg, target = k === "dev" ? s.tDev : s.tAl;
+  const k = state.seg, target = s.t[k];
   const actual = s.mtd[k], done = s.done[k];
   const expected = target * D.doneDays / D.totalDays;
   const achv = target ? actual / target : null;
@@ -438,7 +483,7 @@ function estOf(actual, done) {
   const left = Math.max(0, D.totalDays - D.doneDays - (D.j.today_date ? 1 : 0));
   return actual + rate * left;
 }
-const EST_TIP = "Est. month-end = MTD incl. today + average of completed days x days left after today";
+const EST_TIP = "Est. end of period = actual incl. today + average of completed days x days left after today";
 
 function statusOf(pace, hasTarget) {
   if (!hasTarget) return ["s-none", "No target"];
@@ -452,13 +497,13 @@ function renderBorongan(rows) {
   const ids = new Set(rows.map((s) => s.site)), seg = state.seg;
   const name = (site) => ((STORES.find((s) => s.site === site) || {}).name || "").replace(/^ERAFONE\s+/, "");
   const tsh = (site) => ((STORES.find((s) => s.site === site) || {}).tsh || "").split(" ").slice(0, 2).join(" ");
-  const list = D.borOrders.filter((o) => ids.has(o.site) && (seg === "dev" || AL_SEGS.has(o.seg)));
+  const list = D.borOrders.filter((o) => ids.has(o.site) && inSeg(seg, o.seg, o.x));
   const units = list.reduce((a, o) => a + o.q, 0), val = list.reduce((a, o) => a + o.a, 0);
   const allUnits = rows.reduce((a, s) => a + s.all[seg], 0);
   const stores = new Set(list.map((o) => o.site)).size;
   document.getElementById("borNote").innerHTML =
     `One POS / order number with <b>more than 3 units of the same model type</b>. ${fmt(list.length)} orders · ${fmt(units)} units` +
-    ` (${allUnits ? pct(units / allUnits) : "—"} of ${state.seg === "dev" ? "Device" : "Above Low"} sales) · ${stores} store${stores === 1 ? "" : "s"} · Rp ${nf.format(Math.round(val))} jt. Click a row to filter the page to that store.`;
+    ` (${allUnits ? pct(units / allUnits) : "—"} of ${SEGDEF[state.seg].label} sales) · ${stores} store${stores === 1 ? "" : "s"} · Rp ${nf.format(Math.round(val))} jt. Click a row to filter the page to that store.`;
   const t = document.getElementById("borTable");
   t.tHead.innerHTML = `<tr><th class="l">Date</th><th class="l">Store</th><th class="l">TSH</th><th class="l">POS / order no.</th><th class="l">Model</th><th class="l">Price band</th><th>Units</th><th>Value (Rp jt)</th></tr>`;
   const fmtD = (d) => parseDate(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
@@ -477,20 +522,19 @@ function render() {
   const rows = filtered();
   renderKpis(state.inactive ? baseFiltered() : rows);
   renderBorongan(rows);
-  document.getElementById("paceNote").textContent = `${state.seg === "dev" ? "Device" : "Above Low"} units · ${rows.length} store${rows.length === 1 ? "" : "s"} in filter · completed days only, today shown as a separate point`;
+  document.getElementById("paceNote").textContent = `${SEGDEF[state.seg].label} units · ${rows.length} store${rows.length === 1 ? "" : "s"} in filter · completed days only, today shown as a separate point`;
   const bn = document.getElementById("inactBanner");
   bn.style.display = state.inactive ? "flex" : "none";
-  bn.innerHTML = state.inactive ? `Showing only stores with <b>no ${state.seg === "dev" ? "Device" : "Above Low"} sales ${state.inactive === "today" ? "today" : "month-to-date"}</b> (${rows.length}). <button type="button" class="clear" id="inactClear">✕ Show all</button>` : "";
+  bn.innerHTML = state.inactive ? `Showing only stores with <b>no ${SEGDEF[state.seg].label} sales ${state.inactive === "today" ? "today" : "month-to-date"}</b> (${rows.length}). <button type="button" class="clear" id="inactClear">✕ Show all</button>` : "";
   if (state.inactive) document.getElementById("inactClear").onclick = () => { state.inactive = ""; render(); }; renderPace(rows); renderTsh(); renderTable(rows); renderModels(rows);
 }
 
 function renderKpis(rows) {
   const sum = (f) => rows.reduce((a, s) => a + f(s), 0);
-  const seg = state.seg, segLabel = seg === "dev" ? "Device" : "Above Low";
-  const tgtStores = rows.filter((s) => (seg === "dev" ? s.tDev : s.tAl) > 0);
-  const kd = (k) => ({ t: sum((s) => k === "dev" ? s.tDev : s.tAl), a: sum((s) => s.mtd[k]), d: sum((s) => s.done[k]),
+  const seg = state.seg, segLabel = SEGDEF[seg].label;
+  const tgtStores = rows.filter((s) => s.t[seg] > 0);
+  const kd = (k) => ({ t: sum((s) => s.t[k]), a: sum((s) => s.mtd[k]), d: sum((s) => s.done[k]),
                        b: sum((s) => s.bor[k]), all: sum((s) => s.all[k]) });
-  const dev = kd("dev"), al = kd("al");
   const expFrac = D.doneDays / D.totalDays;
   const card = (label, x) => {
     const achv = x.t ? x.a / x.t : null, pace = paceOf(x.a, x.t);
@@ -499,7 +543,7 @@ function renderKpis(rows) {
       <div class="value">${pct(achv)} <small>${fmt(x.a)} / ${fmt(x.t)}</small></div>
       <div class="bar" title="Tick = expected by end of day ${D.doneDays}"><i style="width:${Math.min(100, (achv || 0) * 100)}%"></i><b style="left:${expFrac * 100}%"></b></div>
       <div class="foot">${statusHtml(statusOf(pace, x.t > 0))} · expected ${pct(expFrac)} by now</div>
-      <div class="est" title="${EST_TIP}">Est. month-end <b>${x.t && est != null ? pct(est / x.t) : "—"}</b> · ${est != null ? fmt(est) : "—"} units</div>
+      <div class="est" title="${EST_TIP}">Est. end of period <b>${x.t && est != null ? pct(est / x.t) : "—"}</b> · ${est != null ? fmt(est) : "—"} units</div>
       <div class="est"><a href="#borongan" class="borlink" title="POS / order numbers with more than 3 units of the same model">Borongan <b>${fmt(x.b)}</b> units · ${x.all ? pct(x.b / x.all) : "—"} of all sales</a></div></div>`;
   };
   const a = kd(seg);
@@ -510,7 +554,8 @@ function renderKpis(rows) {
   const dc = STORES.filter((s) => s.isDC).reduce((x, s) => x + s.dc[seg], 0);
   const gap = Math.max(0, a.t - a.a);
   const short = tgtStores.filter((s) => { const m = metrics(s); return m.gap > m.stock; }).length;
-  document.getElementById("kpis").innerHTML = card("Device", dev) + card("Above Low", al) +
+  const dcSites = STORES.filter((s) => s.isDC).length;
+  document.getElementById("kpis").innerHTML = EV.segs.map((k) => card(SEGDEF[k].label, kd(k))).join("") +
     `<div class="card kpi"><div class="label">Run-rate · ${segLabel} / day</div>
       <div class="value">${runRate.toFixed(1)} <small>now</small></div>
       <div class="foot">Need <b>${need.toFixed(1)}</b>/day for the rest of the period (${(runRate ? need / runRate : 0).toFixed(1)}× current)</div></div>
@@ -520,7 +565,7 @@ function renderKpis(rows) {
      ${inactiveCard(rows, segLabel)}
      <div class="card kpi"><div class="label">Stock · ${segLabel} units</div>
       <div class="value">${fmt(stock)} <small>store</small></div>
-      <div class="foot">+ ${fmt(dc)} at DC · remaining gap ${fmt(gap)} · <b>${short}</b> store${short === 1 ? "" : "s"} with stock below gap</div></div>`;
+      <div class="foot">${dcSites ? `+ ${fmt(dc)} at DC · ` : ""}remaining gap ${fmt(gap)} · <b>${short}</b> store${short === 1 ? "" : "s"} with stock below gap</div></div>`;
   document.querySelectorAll("[data-inact]").forEach((b) => b.onclick = () => {
     state.inactive = state.inactive === b.dataset.inact ? "" : b.dataset.inact; render();
   });
@@ -538,7 +583,7 @@ function inactiveCard(rows, segLabel) {
       <button type="button" data-inact="today" aria-pressed="${state.inactive === "today"}" ${hasToday ? "" : "disabled"} title="${hasToday ? list(tod) : ""}"><b>${hasToday ? fmt(tod.length) : "—"}</b></button>
       <span>today ${hasToday ? `of ${n} · POS until ${D.j.today_last_time.slice(0, 5)}` : "· today's POS not loaded yet"}</span>
       <button type="button" data-inact="mtd" aria-pressed="${state.inactive === "mtd"}" title="${list(mtd)}"><b>${fmt(mtd.length)}</b></button>
-      <span>month-to-date of ${n}</span>
+      <span>since start of period, of ${n}</span>
     </div>
     <div class="foot">Click a number to list those stores</div></div>`;
 }
@@ -559,10 +604,10 @@ function renderPace(rows) {
   const svg = document.getElementById("paceChart"), box = document.getElementById("paceBox");
   const W = 640, H = 260, m = { l: 44, r: 16, t: 10, b: 28 }, iw = W - m.l - m.r, ih = H - m.t - m.b;
   const ids = new Set(rows.map((s) => s.site)), seg = state.seg;
-  const target = rows.reduce((a, s) => a + (seg === "dev" ? s.tDev : s.tAl), 0);
+  const target = rows.reduce((a, s) => a + s.t[seg], 0);
   const perDay = new Array(D.totalDays).fill(0);
-  D.daily.forEach((r) => { if (ids.has(r.site) && (seg === "dev" || AL_SEGS.has(r.seg))) perDay[r.di] += r.q; });
-  const todayQ = D.todayRows.reduce((a, r) => a + (ids.has(r.site) && (seg === "dev" || AL_SEGS.has(r.seg)) ? r.q : 0), 0);
+  D.daily.forEach((r) => { if (ids.has(r.site) && inSeg(seg, r.seg, r.x) && r.di >= 0 && r.di < D.totalDays) perDay[r.di] += r.q; });
+  const todayQ = D.todayRows.reduce((a, r) => a + (ids.has(r.site) && inSeg(seg, r.seg, r.x) ? r.q : 0), 0);
   const cum = []; let c = 0;
   for (let i = 0; i < D.doneDays; i++) { c += perDay[i]; cum.push(c); }
   const yMax = Math.max(target, c + todayQ, 1) * 1.05;
@@ -570,8 +615,11 @@ function renderPace(rows) {
   const ticks = niceTicks(yMax, 5);
   let g = ticks.map((t) => `<line x1="${m.l}" x2="${W - m.r}" y1="${y(t)}" y2="${y(t)}" stroke="var(--grid)"/>
      <text x="${m.l - 6}" y="${y(t) + 4}" text-anchor="end">${fmt(t)}</text>`).join("");
-  for (let i = 0; i < D.totalDays; i += (i === 0 ? 4 : 5)) g += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${i + 1}</text>`;
-  if ((D.totalDays - 1) % 5 !== 4) g += `<text x="${x(D.totalDays - 1)}" y="${H - 8}" text-anchor="middle">${D.totalDays}</text>`;
+  const dLbl = (i) => { const d = new Date(D.start.getTime() + i * dayMs);
+    return d.getDate() + (i === 0 || d.getDate() === 1 ? " " + d.toLocaleDateString("en-GB", { month: "short" }) : ""); };
+  const step = D.totalDays > 31 ? 7 : 5, lastI = D.totalDays - 1;
+  for (let i = 0; i < D.totalDays; i += step) if (lastI - i >= step / 2 || i === 0) g += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${dLbl(i)}</text>`;
+  g += `<text x="${x(lastI)}" y="${H - 8}" text-anchor="middle">${dLbl(lastI)}</text>`;
   // target pace (dashed neutral)
   g += `<line x1="${x(-0.5)}" y1="${y(0)}" x2="${x(D.totalDays - 0.5)}" y2="${y(target)}" stroke="var(--target)" stroke-width="2" stroke-dasharray="5 4"/>`;
   g += `<text x="${x(D.totalDays - 0.5) - 4}" y="${y(target) - 6}" text-anchor="end">Target ${fmt(target)}</text>`;
@@ -608,11 +656,11 @@ function renderPace(rows) {
 function renderTsh() {
   const svg = document.getElementById("tshChart"), box = document.getElementById("tshBox");
   const seg = state.seg;
-  const base = STORES.filter((s) => !s.isDC && (!state.targetOnly || s.tDev > 0));
+  const base = STORES.filter((s) => !s.isDC && (!state.targetOnly || s.t.dev > 0));
   const by = new Map();
   base.forEach((s) => {
     const o = by.get(s.tsh) || { tsh: s.tsh, t: 0, a: 0, n: 0 };
-    o.t += seg === "dev" ? s.tDev : s.tAl; o.a += s.mtd[seg]; o.d = (o.d || 0) + s.done[seg]; o.n++; by.set(s.tsh, o);
+    o.t += s.t[seg]; o.a += s.mtd[seg]; o.d = (o.d || 0) + s.done[seg]; o.n++; by.set(s.tsh, o);
   });
   const list = [...by.values()].filter((o) => o.t > 0).sort((a, b) => b.a / b.t - a.a / a.t);
   const W = 420, rowH = 40, m = { l: 132, r: 56, t: 6 }, H = m.t + list.length * rowH + 22, iw = W - m.l - m.r;
@@ -635,7 +683,7 @@ function renderTsh() {
   svg.innerHTML = g;
   svg.querySelectorAll(".hit").forEach((r) => {
     const o = list[+r.dataset.i];
-    r.onmousemove = (e) => { const p = svgPoint(svg, e); tipAt(box, `<div><b>${esc(o.tsh)}</b></div><div>Actual <b>${fmt(o.a)}</b> / target <b>${fmt(o.t)}</b> (${pct(o.a / o.t)})</div><div>Expected by now ${pct(expFrac)} · gap ${fmt(Math.max(0, o.t - o.a))}</div><div>Est. month-end ${pct(estOf(o.a, o.d) / o.t)}</div><div style="color:var(--text-muted)">Click to filter</div>`, p.px, p.py); };
+    r.onmousemove = (e) => { const p = svgPoint(svg, e); tipAt(box, `<div><b>${esc(o.tsh)}</b></div><div>Actual <b>${fmt(o.a)}</b> / target <b>${fmt(o.t)}</b> (${pct(o.a / o.t)})</div><div>Expected by now ${pct(expFrac)} · gap ${fmt(Math.max(0, o.t - o.a))}</div><div>Est. end of period ${pct(estOf(o.a, o.d) / o.t)}</div><div style="color:var(--text-muted)">Click to filter</div>`, p.px, p.py); };
     r.onmouseleave = () => hideTip(box);
     r.style.cursor = "pointer";
     r.onclick = () => { state.tsh = state.tsh === o.tsh ? "" : o.tsh; state.store = ""; document.getElementById("fTsh").value = state.tsh; fillStores(); render(); };
@@ -643,12 +691,12 @@ function renderTsh() {
 }
 
 function renderTable(rows) {
-  const t = document.getElementById("storeTable"), segLabel = state.seg === "dev" ? "Device" : "Above Low";
+  const t = document.getElementById("storeTable"), segLabel = SEGDEF[state.seg].label;
   const cols = [
-    ["name", "Store", "l"], ["tsh", "TSH", "l"], ["target", "Target"], ["actual", "MTD"], ["today", "Today"], ["bor", "Borongan"],
+    ["name", "Store", "l"], ["tsh", "TSH", "l"], ["target", "Target"], ["actual", "To date"], ["today", "Today"], ["bor", "Borongan"],
     ["achv", "Achv"], ["estAchv", "Est. Achv"], ["gapPace", "Status"], ["gap", "Gap"], ["need", "Need / day"],
-    ["oct", "Oct-26"], ["ly", "Nov-25"], ["stock", "Stock"], ["cover", "Stock vs gap"]];
-  t.tHead.innerHTML = `<tr>${cols.map(([k, l, c], i) => `<th data-k="${k}" class="${c || ""}" ${state.sortKey === k ? `aria-sort="${state.sortDir === "asc" ? "ascending" : "descending"}"` : ""}>${i === 2 ? `<span class="grp">${segLabel}</span>` : i === 11 ? `<span class="grp">Reference (full month)</span>` : i === 13 ? `<span class="grp">Store stock ${D.j.stock_date.slice(8)}/${D.j.stock_date.slice(5,7)}</span>` : `<span class="grp">&nbsp;</span>`}${l}</th>`).join("")}</tr>`;
+    ["oct", D.j.prev_label || EV.prev || "Prev"], ["ly", D.j.ly_label || EV.ly || "Last year"], ["stock", "Stock"], ["cover", "Stock vs gap"]];
+  t.tHead.innerHTML = `<tr>${cols.map(([k, l, c], i) => `<th data-k="${k}" class="${c || ""}" ${state.sortKey === k ? `aria-sort="${state.sortDir === "asc" ? "ascending" : "descending"}"` : ""}>${i === 2 ? `<span class="grp">${segLabel}</span>` : i === 11 ? `<span class="grp">Reference</span>` : i === 13 ? `<span class="grp">Store stock ${D.j.stock_date.slice(8)}/${D.j.stock_date.slice(5,7)}</span>` : `<span class="grp">&nbsp;</span>`}${l}</th>`).join("")}</tr>`;
   const data = rows.map((s) => ({ s, m: metrics(s) }));
   const key = state.sortKey, dir = state.sortDir === "asc" ? 1 : -1;
   const val = (o) => key === "name" ? o.s.name : key === "tsh" ? o.s.tsh : key === "cover" ? (o.m.gap ? o.m.stock / o.m.gap : 1e9) : (o.m[key] ?? -1);
@@ -666,9 +714,9 @@ function renderTable(rows) {
       <td>${has ? fmt(m.target) : `<span class="muted">0</span>`}</td>
       <td>${fmt(m.actual)}</td>
       <td class="${m.today ? "" : "muted"}">${fmt(m.today)}</td>
-      <td class="${m.bor ? "" : "muted"}" title="Borongan units MTD (all sales): ${pct(m.borShare)} of this store's sales">${fmt(m.bor)}</td>
+      <td class="${m.bor ? "" : "muted"}" title="Borongan units to date (all sales): ${pct(m.borShare)} of this store's sales">${fmt(m.bor)}</td>
       <td>${has ? `<span class="mini"><i style="width:${Math.min(100, m.achv * 100)}%"></i><b style="left:${expFrac * 100}%"></b></span>${pct(m.achv)}` : `<span class="muted">—</span>`}</td>
-      <td title="Month-end estimate ${m.estQty != null ? fmt(m.estQty) : "—"} units">${has ? pct(m.estAchv) : `<span class="muted">—</span>`}</td>
+      <td title="End-of-period estimate ${m.estQty != null ? fmt(m.estQty) : "—"} units">${has ? pct(m.estAchv) : `<span class="muted">—</span>`}</td>
       <td>${statusHtml(st)}</td>
       <td>${has ? fmt(m.gap) : "—"}</td>
       <td>${has ? m.need.toFixed(1) : "—"}</td>
@@ -687,18 +735,18 @@ function renderTable(rows) {
 
 function renderModels(rows) {
   const svg = document.getElementById("modelChart"), box = document.getElementById("modelBox");
-  const ids = new Set(rows.map((s) => s.site)), seg = state.seg, ok = (sg) => seg === "dev" || AL_SEGS.has(sg);
+  const ids = new Set(rows.map((s) => s.site)), seg = state.seg, ok = (r) => inSeg(seg, r.seg, r.x);
   const by = new Map(); const get = (mo) => by.get(mo) || (by.set(mo, { model: mo, sales: 0, stock: 0, dc: 0, segs: new Set() }), by.get(mo));
-  D.daily.forEach((r) => { if (ids.has(r.site) && ok(r.seg)) { const o = get(r.model); o.sales += r.q; o.segs.add(r.seg); } });
-  D.todayRows.forEach((r) => { if (ids.has(r.site) && ok(r.seg)) { const o = get(r.model); o.sales += r.q; o.segs.add(r.seg); } });
-  D.stockRows.forEach((r) => { if (!ok(r.seg)) return;
+  D.daily.forEach((r) => { if (ids.has(r.site) && ok(r)) { const o = get(r.model); o.sales += r.q; o.segs.add(r.seg); } });
+  D.todayRows.forEach((r) => { if (ids.has(r.site) && ok(r)) { const o = get(r.model); o.sales += r.q; o.segs.add(r.seg); } });
+  D.stockRows.forEach((r) => { if (!ok(r)) return;
     if (r.line === "stock_dc") { const o = get(r.model); o.dc += r.q; o.segs.add(r.seg); }
     else if (ids.has(r.site)) { const o = get(r.model); o.stock += r.q; o.segs.add(r.seg); } });
   const list = [...by.values()].sort((a, b) => b.sales - a.sales || b.stock - a.stock).slice(0, 12);
   const W = 1000, rowH = 24, m = { l: 150, r: 20, t: 26, gap: 40 }, H = m.t + list.length * rowH + 8;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   const colW = (W - m.l - m.r - m.gap * 2) / 3;
-  const panels = [["sales", "MTD sales (incl. today)"], ["stock", "Store stock"], ["dc", "DC stock"]];
+  const panels = [["sales", "Sales to date (incl. today)"], ["stock", "Store stock"], ["dc", "DC stock"]];
   let g = "";
   panels.forEach(([k, label], pi) => {
     const x0 = m.l + pi * (colW + m.gap), mx = Math.max(1, ...list.map((o) => o[k]));
@@ -717,7 +765,7 @@ function renderModels(rows) {
   svg.innerHTML = g;
   svg.querySelectorAll(".hit").forEach((r) => {
     const o = list[+r.dataset.i];
-    r.onmousemove = (e) => { const p = svgPoint(svg, e); tipAt(box, `<b>${esc(o.model)}</b><div>MTD sales ${fmt(o.sales)} · store stock ${fmt(o.stock)} · DC ${fmt(o.dc)}</div><div>Store stock ÷ MTD daily rate: ${o.sales ? Math.round(o.stock / (o.sales / (D.doneDays + 0.5))) + " days" : "no sales yet"}</div>`, p.px, p.py); };
+    r.onmousemove = (e) => { const p = svgPoint(svg, e); tipAt(box, `<b>${esc(o.model)}</b><div>Sales to date ${fmt(o.sales)} · store stock ${fmt(o.stock)} · DC ${fmt(o.dc)}</div><div>Store stock ÷ daily sales rate: ${o.sales ? Math.round(o.stock / (o.sales / (D.doneDays + 0.5))) + " days" : "no sales yet"}</div>`, p.px, p.py); };
     r.onmouseleave = () => hideTip(box);
   });
 }
@@ -731,7 +779,7 @@ function shotName() {
   const now = new Date(), p = (n) => String(n).padStart(2, "0");
   const scope = state.store ? state.store + "_" + (STORES.find((s) => s.site === state.store) || {}).name
               : state.tsh ? "TSH_" + state.tsh : "All";
-  return `SBD_VIVO_${scope}_${state.seg === "dev" ? "Device" : "AboveLow"}${state.bor === "excl" ? "_ExclBorongan" : state.bor === "only" ? "_BoronganOnly" : ""}_${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}-${p(now.getHours())}${p(now.getMinutes())}.png`
+  return `SBD_VIVO_${EVKEY}_${scope}_${SEGDEF[state.seg].label.replace(/\s/g, "")}${state.bor === "excl" ? "_ExclBorongan" : state.bor === "only" ? "_BoronganOnly" : ""}_${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}-${p(now.getHours())}${p(now.getMinutes())}.png`
     .replace(/[^\w.\-]+/g, "_");
 }
 function cloneWithStyles(src) {

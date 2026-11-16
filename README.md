@@ -1,64 +1,42 @@
-# VIVO Super Brand Day · Jakarta dashboard
+# VIVO Super Brand Day dashboard (Jakarta + Tangerang - Banten)
 
-A static web dashboard (GitHub Pages) using **import mode** like Power BI: one BigQuery query pulls a small,
-pre-aggregated extract (`data/sbd.json`, ~20 KB). Every filter, sort and hover then runs in the browser
-at **zero BigQuery cost**. Data only changes when you press **Run workflow**.
+Static web dashboard on GitHub Pages using **import mode** like Power BI: one BigQuery query per area pulls a small
+extract (`data/<area>.json`). Every filter, sort and hover then runs in the browser at **zero BigQuery cost**.
+Use the area switch at the top, or link straight to an area: `.../sbd_vivo/#jakarta`, `.../sbd_vivo/#tangban`.
 
 | File | What it is |
 |---|---|
-| `index.html` | The dashboard (no external libraries) |
-| `data/sbd.json` | The imported extract |
-| `sql/import.sql` | The single import query. **Edit the period here** (`DATE '2026-11-01'` / `DATE '2026-11-30'`) |
-| `scripts/refresh.py` | Dry-runs the query (cost check), runs it with a 2 GB billing cap, writes `data/sbd.json` |
+| `index.html` | The dashboard (no external libraries). Areas are listed in `EVENTS` near the top of the script |
+| `sql/sbd_template.sql` | The one import query, shared by all areas |
+| `scripts/refresh.py` | Fills the template per area (`EVENTS`: dates, target table, reference periods), dry-runs it, runs it, writes `data/<area>.json` |
+| `data/jakarta.json`, `data/tangban.json` | The imported extracts |
 | `.github/workflows/refresh.yml` | The "Refresh data" button + Pages deploy |
 
-**Cost per refresh:** about 0.84 GB scanned, roughly Rp 85 on demand, or free within BigQuery's 1 TB/month free tier.
+**Cost per refresh:** about 1.2 GB scanned per area (2 areas, about 2.5 GB, roughly Rp 250), or free within BigQuery's 1 TB/month free tier.
 
----
-
-## One-time setup (about 15 minutes)
-
-### 1. Google Cloud: a read-only service account
-1. Open https://console.cloud.google.com/iam-admin/serviceaccounts?project=e-smart-433113, then **Create service account**.
-   Name: `sbd-dashboard-reader`.
-2. Grant two roles: **BigQuery Data Viewer** and **BigQuery Job User**. Then **Done**.
-3. Open the account, go to **Keys**, then **Add key → Create new key → JSON**. A `.json` file downloads.
-   Treat it like a password. Never commit it to the repo.
-
-> If your org blocks key creation (policy `iam.disableServiceAccountKeyCreation`), ask IT for an exception
-> or for Workload Identity Federation instead.
-
-### 2. GitHub repo
-1. Create a repo, e.g. `sbd-vivo-dashboard`, and upload all files in this folder (keep the `.github` folder).
-2. **Settings → Secrets and variables → Actions → New repository secret**.
-   Name: `GCP_SA_KEY`. Value: paste the whole content of the JSON key file.
-3. **Settings → Pages → Build and deployment → Source: GitHub Actions**.
-4. In `index.html`, set `const GITHUB_REPO = "your-username/sbd-vivo-dashboard";` so the
-   **Refresh data** button on the page opens the workflow.
-
-### 3. First run
-**Actions → Refresh data → Run workflow**. After about 1 minute the site is live at
-`https://<your-username>.github.io/sbd-vivo-dashboard/`.
-
----
-
-## Daily use
-- **Refresh:** click **Refresh data** on the page (or go to Actions → Refresh data), then **Run workflow**. Wait about 1 minute and reload.
-- **New period or new targets:** update `master_data.target_sbd_vivo_jakarta` in BigQuery, edit the two dates
-  in `sql/import.sql`, then run the workflow.
-- **Automatic refresh later:** uncomment the `schedule` block in `.github/workflows/refresh.yml`.
-
-## ⚠ Visibility
-GitHub Pages sites are **public** unless the org has GitHub Enterprise Cloud with private Pages.
-Anyone with the URL can see the store names and figures. Check with IT/data governance before sharing.
+## Areas
+| Area | Period | Targets (table) |
+|---|---|---|
+| Jakarta | 1-30 Nov 2026 | Device, Above Low (`master_data.target_sbd_vivo_jakarta`) |
+| Tangerang - Banten | 15 Nov-31 Dec 2026 | Device, Above Low, V80 Lite (`master_data.target_sbd_vivo_tangban`) |
 
 ## Definitions
-- **Target Device:** all VIVO `Product_Category = Device` qty sold per store, 1–30 Nov (`region_data.sales_all_retail`).
-- **Target Above Low:** the same, where `price_category_GFK` is not LOW (MID + HIGH + FLAGSHIP).
-- **Today:** intraday PAID POS orders from `sales_daily`. That table has no GFK field, so the same GFK bands are applied
-  to the nett unit price incl. tax (≤ Rp 3 jt Low, ≤ 5 jt Mid, ≤ 9 jt High, above that Flagship). Today's rows are only
-  added when their date is after the last date in `sales_all_retail`, so nothing is counted twice.
-- **Stock:** `sales_vs_stock` (store + DC). Stock has no selling price, so for the Above Low view it is split by `price_segment`.
-- **Pace / status:** completed-day sales vs target × (completed days ÷ 30). On pace ≥ 100%, Slightly behind 80–99%, Behind < 80%.
-- **Need / day:** remaining gap ÷ remaining days (including today). Calendar days, since stores trade daily.
-- **Stock vs gap:** latest store stock for the segment compared with the store's remaining gap.
+- **Sales:** VIVO `Product_Category = Device`, **`ket_po = 'Non PO'` only**: `region_data.sales_all_retail` for completed days, plus
+  today's PAID POS orders from `region_data.sales_daily` (only when its date is after the last date in `sales_all_retail`).
+- **Target Device:** all VIVO Device qty. **Target Above Low:** `price_category_GFK` not LOW (MID + HIGH + FLAGSHIP).
+  **Target V80 Lite:** `Model_Type_Detail = 'V80 LITE'`.
+- **Today's price band:** `sales_daily` has no GFK field, so the same bands are applied to nett unit price incl. tax (<= Rp 3 jt Low, <= 5 jt Mid, <= 9 jt High, above Flagship).
+- **Borongan:** one POS / order number with **more than 3 units of the same Model_Type**. The switch can show all sales, exclude Borongan or show Borongan only.
+- **Status:** actual to date (incl. today) vs target pro-rata for completed days. On pace >= 100%, Slightly behind 80-99%, Behind < 80%.
+- **Est. end of period:** actual incl. today + average of completed days x days left after today.
+- **Stock:** `sales_vs_stock` (store + DC). Stock has no selling price, so it is split by `price_segment`.
+- **Reference columns:** Jakarta = Oct-26 and Nov-25. Tangerang - Banten = the 47 days before the event, and 15 Nov-31 Dec 2025.
+
+## Daily use
+Click **Refresh data** on the page (or Actions -> Refresh data -> Run workflow), wait about 1-2 minutes, reload (Ctrl+F5).
+
+## Adding another area
+Add an entry to `EVENTS` in `scripts/refresh.py` (dates, target table) **and** in `index.html` (name, file, which targets), then run the workflow.
+
+## Visibility
+GitHub Pages sites are **public** unless the org has GitHub Enterprise Cloud with private Pages.
