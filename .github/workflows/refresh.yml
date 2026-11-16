@@ -1,7 +1,7 @@
 name: Refresh data
 
-# Manual refresh: Actions tab -> "Refresh data" -> "Run workflow" (one BigQuery query, ~0.4 GB scan).
-# A push to main (e.g. you edit index.html or sql/import.sql) only redeploys the site, no query.
+# Manual refresh: Actions tab -> "Refresh data" -> "Run workflow" (one BigQuery query per SBD area, ~1.2 GB each).
+# A push to main (e.g. you edit index.html or sql/sbd_template.sql) only redeploys the site, no query.
 # To make the refresh automatic later, uncomment the schedule block. Cron is UTC: "30 0 * * *" = 07:30 WIB.
 on:
   workflow_dispatch:
@@ -44,7 +44,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
-          git add data/sbd.json
+          git add data/*.json
           if git diff --cached --quiet; then
             echo "No change in data."
           else
@@ -67,7 +67,7 @@ jobs:
         run: |
           mkdir -p _site/data
           cp index.html _site/
-          cp data/sbd.json _site/data/
+          cp data/*.json _site/data/
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
