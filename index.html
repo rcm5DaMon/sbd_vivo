@@ -202,7 +202,7 @@
   <section class="card table-card">
     <div class="table-head">
       <div>
-        <h2>Store achievement</h2>
+        <h2>Store achievement <button type="button" class="btn-ghost" id="xlsxBtn" data-noshot style="margin-left:8px;font-size:12px;padding:4px 10px" title="Download this table, as currently filtered and sorted, as an Excel file">⬇ Export XLSX</button></h2>
         <p class="note" style="margin:0">Status compares actual to date (incl. today) with the target pro-rata for completed days. "Est. Achv" = (actual incl. today + completed-day average × days left after today) ÷ target. Click a column to sort, or a store row to filter the whole page to that store. "Need / day" = remaining target ÷ remaining days (incl. today). Stock flag compares store stock with the remaining gap.</p>
       </div>
     </div>
@@ -368,6 +368,7 @@ function initOnce() {
   document.querySelectorAll("[data-bor]").forEach((b) => b.onclick = () => setBor(b.dataset.bor));
   document.getElementById("fTargetOnly").onchange = (e) => { state.targetOnly = e.target.checked; fillStores(); render(); };
   document.getElementById("fSearch").oninput = (e) => { state.q = e.target.value.trim().toLowerCase(); render(); };
+  document.getElementById("xlsxBtn").onclick = exportStoreXlsx;
   document.querySelectorAll("#storeTable thead").forEach((th) => th.onclick = (e) => {
     const c = e.target.closest("th"); if (!c || !c.dataset.k) return;
     if (state.sortKey === c.dataset.k) state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
@@ -690,6 +691,14 @@ function renderTsh() {
   });
 }
 
+function sortedTableData(rows) {
+  const data = rows.map((s) => ({ s, m: metrics(s) }));
+  const key = state.sortKey, dir = state.sortDir === "asc" ? 1 : -1;
+  const val = (o) => key === "name" ? o.s.name : key === "tsh" ? o.s.tsh : key === "cover" ? (o.m.gap ? o.m.stock / o.m.gap : 1e9) : (o.m[key] ?? -1);
+  data.sort((a, b) => { const va = val(a), vb = val(b); return (typeof va === "string" ? va.localeCompare(vb) : va - vb) * dir; });
+  return data;
+}
+
 function renderTable(rows) {
   const t = document.getElementById("storeTable"), segLabel = SEGDEF[state.seg].label;
   const cols = [
@@ -697,10 +706,7 @@ function renderTable(rows) {
     ["achv", "Achv"], ["estAchv", "Est. Achv"], ["gapPace", "Status"], ["gap", "Gap"], ["need", "Need / day"],
     ["oct", D.j.prev_label || EV.prev || "Prev"], ["ly", D.j.ly_label || EV.ly || "Last year"], ["stock", "Stock"], ["cover", "Stock vs gap"]];
   t.tHead.innerHTML = `<tr>${cols.map(([k, l, c], i) => `<th data-k="${k}" class="${c || ""}" ${state.sortKey === k ? `aria-sort="${state.sortDir === "asc" ? "ascending" : "descending"}"` : ""}>${i === 2 ? `<span class="grp">${segLabel}</span>` : i === 11 ? `<span class="grp">Reference</span>` : i === 13 ? `<span class="grp">Store stock ${D.j.stock_date.slice(8)}/${D.j.stock_date.slice(5,7)}</span>` : `<span class="grp">&nbsp;</span>`}${l}</th>`).join("")}</tr>`;
-  const data = rows.map((s) => ({ s, m: metrics(s) }));
-  const key = state.sortKey, dir = state.sortDir === "asc" ? 1 : -1;
-  const val = (o) => key === "name" ? o.s.name : key === "tsh" ? o.s.tsh : key === "cover" ? (o.m.gap ? o.m.stock / o.m.gap : 1e9) : (o.m[key] ?? -1);
-  data.sort((a, b) => { const va = val(a), vb = val(b); return (typeof va === "string" ? va.localeCompare(vb) : va - vb) * dir; });
+  const data = sortedTableData(rows);
   const expFrac = D.doneDays / D.totalDays;
   t.tBodies[0].innerHTML = data.map(({ s, m }) => {
     const has = m.target > 0, st = statusOf(m.pace, has);
@@ -768,6 +774,92 @@ function renderModels(rows) {
     r.onmousemove = (e) => { const p = svgPoint(svg, e); tipAt(box, `<b>${esc(o.model)}</b><div>Sales to date ${fmt(o.sales)} · store stock ${fmt(o.stock)} · DC ${fmt(o.dc)}</div><div>Store stock ÷ daily sales rate: ${o.sales ? Math.round(o.stock / (o.sales / (D.doneDays + 0.5))) + " days" : "no sales yet"}</div>`, p.px, p.py); };
     r.onmouseleave = () => hideTip(box);
   });
+}
+
+// ===== Export the Store achievement table to .xlsx (no external libraries) =====
+function exportStoreXlsx() {
+  const rows = filtered(), data = sortedTableData(rows), seg = SEGDEF[state.seg].label;
+  const borTxt = state.bor === "excl" ? "Excl. Borongan" : state.bor === "only" ? "Borongan only" : "All sales";
+  const scope = state.store ? "Store " + state.store : state.tsh ? "TSH " + state.tsh : "All TSH";
+  const prevL = D.j.prev_label || EV.prev || "Prev", lyL = D.j.ly_label || EV.ly || "Last year";
+  const statusTxt = (m) => statusOf(m.pace, m.target > 0)[1];
+  const coverTxt = (m) => !m.target ? "" : m.gap === 0 ? "Target hit" : m.stock >= m.gap ? "Covered" : "Short " + Math.round(m.gap - m.stock);
+  // cell = [value, style]; styles: 1 bold, 2 int, 3 pct, 4 dec1, 5 header, 6 bold int, 7 bold pct, 8 title, 9 bold dec1
+  const S = (v, st = 0) => [v, st];
+  const head = ["Site", "Store", "TSH", "Target " + seg, "To date", "Today", "Borongan", "Achv %", "Est. Achv %", "Status",
+                "Gap", "Need / day", prevL, lyL, "Stock", "Stock vs gap"];
+  const sheet = [
+    [S("VIVO Super Brand Day · " + EV.name + " · Store achievement", 8)],
+    [S("Period"), S(D.j.period_start + " to " + D.j.period_end)],
+    [S("View"), S(seg + " · " + borTxt + " · " + scope + (state.targetOnly ? " · only stores with a target" : "") + (state.inactive ? " · inactive " + state.inactive : ""))],
+    [S("Data"), S("Sales to " + D.j.sales_asof + (D.j.today_date ? " + today until " + (D.j.today_last_time || "").slice(0, 5) : "") + " · stock " + D.j.stock_date + " · imported " + D.j.refreshed_at.slice(0, 16) + " WIB")],
+    [S("Day"), S(D.doneDays + " of " + D.totalDays + " complete, " + D.remDays + " days left incl. today")],
+    [],
+    head.map((t) => S(t, 5)),
+  ];
+  data.forEach(({ s, m }) => {
+    const has = m.target > 0;
+    sheet.push([S(s.site), S(s.name), S(s.tsh), S(m.target, 2), S(m.actual, 2), S(m.today, 2), S(m.bor, 2),
+      has ? S(m.achv, 3) : S(""), has ? S(m.estAchv, 3) : S(""), S(statusTxt(m)),
+      has ? S(m.gap, 2) : S(""), has ? S(m.need, 4) : S(""), S(m.oct, 2), S(m.ly, 2), S(m.stock, 2), S(coverTxt(m))]);
+  });
+  const tot = data.reduce((a, { m }) => { ["target", "actual", "today", "bor", "gap", "oct", "ly", "stock", "done"].forEach((k) => a[k] += m[k]); return a; },
+    { target: 0, actual: 0, today: 0, bor: 0, gap: 0, oct: 0, ly: 0, stock: 0, done: 0 });
+  sheet.push([S("Total", 1), S(data.length + " stores", 1), S(""), S(tot.target, 6), S(tot.actual, 6), S(tot.today, 6), S(tot.bor, 6),
+    tot.target ? S(tot.actual / tot.target, 7) : S(""), tot.target ? S(estOf(tot.actual, tot.done) / tot.target, 7) : S(""),
+    S(statusOf(paceOf(tot.actual, tot.target), tot.target > 0)[1], 1), S(tot.gap, 6), S(tot.gap / D.remDays, 9),
+    S(tot.oct, 6), S(tot.ly, 6), S(tot.stock, 6), S("")]);
+  const widths = [8, 38, 26, 12, 10, 8, 10, 9, 11, 15, 8, 11, 13, 16, 8, 14];
+  const p = (n) => String(n).padStart(2, "0"), now = new Date();
+  const fname = `SBD_VIVO_${EVKEY}_StoreAchievement_${seg.replace(/\s/g, "")}${state.bor === "excl" ? "_ExclBorongan" : state.bor === "only" ? "_BoronganOnly" : ""}` +
+    `${state.tsh && !state.store ? "_" + state.tsh : ""}${state.store ? "_" + state.store : ""}_${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}-${p(now.getHours())}${p(now.getMinutes())}.xlsx`;
+  const blob = buildXlsx("Store achievement", sheet, widths, 7);
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = fname.replace(/[^\w.\-]+/g, "_");
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  toast("Exported " + data.length + " stores to " + a.download);
+}
+
+// Minimal .xlsx writer: one sheet, inline strings, a few number formats, frozen header row
+function buildXlsx(sheetName, rows, widths, freezeRow) {
+  const x = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const col = (i) => { let s = ""; i++; while (i) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
+  const sheetRows = rows.map((r, ri) => `<row r="${ri + 1}">` + r.map(([v, st], ci) => {
+    const ref = col(ci) + (ri + 1), sa = st ? ` s="${st}"` : "";
+    if (v === "" || v == null || (typeof v === "number" && !isFinite(v))) return st ? `<c r="${ref}"${sa}/>` : "";
+    return typeof v === "number" ? `<c r="${ref}"${sa}><v>${v}</v></c>` : `<c r="${ref}"${sa} t="inlineStr"><is><t xml:space="preserve">${x(v)}</t></is></c>`;
+  }).join("") + `</row>`).join("");
+  const lastRef = col(Math.max(...rows.map((r) => r.length)) - 1) + rows.length;
+  const files = {
+    "[Content_Types].xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`,
+    "_rels/.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
+    "xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${x(sheetName)}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    "xl/_rels/workbook.xml.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
+    "xl/styles.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0.0"/></numFmts><fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="13"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFDDEBF7"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left/><right/><top/><bottom style="thin"><color rgb="FF8EA9C1"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="10"><xf/><xf fontId="1" applyFont="1"/><xf numFmtId="3" applyNumberFormat="1"/><xf numFmtId="9" applyNumberFormat="1"/><xf numFmtId="164" applyNumberFormat="1"/><xf fontId="1" fillId="2" borderId="1" applyFont="1" applyFill="1" applyBorder="1"><alignment wrapText="1" vertical="center"/></xf><xf numFmtId="3" fontId="1" applyNumberFormat="1" applyFont="1"/><xf numFmtId="9" fontId="1" applyNumberFormat="1" applyFont="1"/><xf fontId="2" applyFont="1"/><xf numFmtId="164" fontId="1" applyNumberFormat="1" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`,
+    "xl/worksheets/sheet1.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:${lastRef}"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="${freezeRow}" topLeftCell="A${freezeRow + 1}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${widths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join("")}</cols><sheetData>${sheetRows}</sheetData><autoFilter ref="A${freezeRow}:${col(widths.length - 1)}${rows.length - 1}"/></worksheet>`,
+  };
+  return new Blob([zipStore(files)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}
+// ZIP (stored, no compression) - enough for small xlsx files
+function zipStore(files) {
+  const enc = new TextEncoder(), crcT = zipStore.t || (zipStore.t = Array.from({ length: 256 }, (_, n) => {
+    let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; }));
+  const crc32 = (b) => { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = crcT[(c ^ b[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+  const parts = [], central = []; let offset = 0;
+  const u16 = (v) => [v & 255, (v >>> 8) & 255], u32 = (v) => [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255];
+  for (const [name, text] of Object.entries(files)) {
+    const nb = enc.encode(name), db = enc.encode(text), crc = crc32(db);
+    const local = new Uint8Array([...u32(0x04034b50), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0x21),
+      ...u32(crc), ...u32(db.length), ...u32(db.length), ...u16(nb.length), ...u16(0)]);
+    parts.push(local, nb, db);
+    central.push(new Uint8Array([...u32(0x02014b50), ...u16(20), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0x21),
+      ...u32(crc), ...u32(db.length), ...u32(db.length), ...u16(nb.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(offset)]), nb);
+    offset += local.length + nb.length + db.length;
+  }
+  const cdSize = central.reduce((a, b) => a + b.length, 0), n = Object.keys(files).length;
+  const end = new Uint8Array([...u32(0x06054b50), ...u16(0), ...u16(0), ...u16(n), ...u16(n), ...u32(cdSize), ...u32(offset), ...u16(0)]);
+  return new Blob([...parts, ...central, end]);
 }
 
 // ===== Screenshot: render the dashboard (as filtered) to PNG without external libraries =====
